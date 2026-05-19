@@ -1,0 +1,49 @@
+name: layer
+description: "Layer — 場所への共感を、友達と積み重ねていく SNS"
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.5.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # 状態管理
+  flutter_riverpod: ^2.5.0
+  riverpod_annotation: ^2.3.0
+
+  # ルーティング
+  go_router: ^14.0.0
+
+  # 地図・位置情報
+  google_maps_flutter: ^2.6.0
+  google_maps_cluster_manager: ^3.1.0
+  geolocator: ^12.0.0
+  geocoding: ^3.0.0
+
+  # 認証
+  google_sign_in: ^6.2.0
+
+  # API 通信（Go バックエンド）
+  dio: ^5.5.0
+
+  # その他
+  flutter_dotenv: ^5.1.0
+  flutter_svg: ^2.0.0
+  intl: ^0.19.0
+  shared_preferences: ^2.2.0
+  share_plus: ^9.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  build_runner: ^2.4.0
+  riverpod_generator: ^2.4.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - .env
