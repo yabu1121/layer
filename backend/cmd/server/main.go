@@ -21,6 +21,10 @@ func main() {
 		log.Fatalf("failed to migrate: %v", err)
 	}
 
+	if err := database.MigrateSQL(db); err != nil {
+		log.Fatalf("failed to apply SQL migrations: %v", err)
+	}
+
 	e := router.New(db)
 
 	port := cfg.Port
