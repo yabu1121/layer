@@ -44,11 +44,18 @@ func MigrateSQL(db *gorm.DB) error {
 		if err != nil {
 			return fmt.Errorf("read %s: %w", name, err)
 		}
-		if err := db.Exec(string(body)).Error; err != nil {
-			return fmt.Errorf("apply %s: %w", name, err)
-		}
-		if err := db.Exec("insert into schema_migrations(version) values (?)", version).Error; err != nil {
-			return fmt.Errorf("record %s: %w", name, err)
+		// 本体実行と schema_migrations への記録は 1 トランザクションで完結させる。
+		// 途中で失敗したら DB は変更前に戻り、再起動で同じ migration を最初からやり直せる。
+		if err := db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Exec(string(body)).Error; err != nil {
+				return fmt.Errorf("apply %s: %w", name, err)
+			}
+			if err := tx.Exec("insert into schema_migrations(version) values (?)", version).Error; err != nil {
+				return fmt.Errorf("record %s: %w", name, err)
+			}
+			return nil
+		}); err != nil {
+			return err
 		}
 	}
 	return nil
