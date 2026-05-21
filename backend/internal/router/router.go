@@ -21,10 +21,13 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	e.GET("/health", handler.Health)
 
 	pin := handler.NewPinHandler(db)
+	auth := handler.NewAuthHandler(db, verify)
 
-	// /api/* は認証必須。サインイン（#18 で追加予定）は除外する。
+	// /api/* は認証必須。サインイン／サインアウトは認証前に叩くため除外する。
 	api := e.Group("/api")
-	api.Use(authmw.RequireAuth(db, verify, "/api/auth/sign-in"))
+	api.Use(authmw.RequireAuth(db, verify, "/api/auth/sign-in", "/api/auth/sign-out"))
+	api.POST("/auth/sign-in", auth.SignIn)
+	api.POST("/auth/sign-out", auth.SignOut)
 	api.GET("/pins", pin.List)
 	api.POST("/pins", pin.Create)
 
