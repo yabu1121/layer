@@ -189,3 +189,85 @@ func (h *FriendHandler) Reject(c echo.Context) error {
 	}
 	return c.NoContent(http.StatusNoContent)
 }
+
+type incomingRequest struct {
+	ID        string     `json:"id"`
+	Requester publicUser `json:"requester"`
+}
+
+type incomingResponse struct {
+	Requests []incomingRequest `json:"requests"`
+}
+
+type friendsResponse struct {
+	Friends []publicUser `json:"friends"`
+}
+
+// ListIncoming は自分宛の pending な友達申請を申請者情報つきで返す（FR-2.3 / US-A6）。
+func (h *FriendHandler) ListIncoming(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+
+	type row struct {
+		RequestID   string `gorm:"column:request_id"`
+		ID          string `gorm:"column:id"`
+		Handle      string `gorm:"column:handle"`
+		DisplayName string `gorm:"column:display_name"`
+		Icon        string `gorm:"column:icon"`
+	}
+	var rows []row
+	const q = `
+select f.id as request_id, u.id as id, u.user_id as handle,
+       u.display_name as display_name, u.icon as icon
+from friendships f
+join users u on u.id = f.requester_id
+where f.receiver_id = ? and f.status = 'pending'
+order by f.created_at desc`
+	if err := h.db.Raw(q, me.ID).Scan(&rows).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	requests := make([]incomingRequest, 0, len(rows))
+	for _, r := range rows {
+		requests = append(requests, incomingRequest{
+			ID:        r.RequestID,
+			Requester: publicUser{ID: r.ID, UserID: r.Handle, DisplayName: r.DisplayName, Icon: r.Icon},
+		})
+	}
+	return c.JSON(http.StatusOK, incomingResponse{Requests: requests})
+}
+
+// ListFriends は accepted な友達（双方向どちらの向きでも相手）を返す（US-A6）。
+func (h *FriendHandler) ListFriends(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+
+	type row struct {
+		ID          string `gorm:"column:id"`
+		Handle      string `gorm:"column:handle"`
+		DisplayName string `gorm:"column:display_name"`
+		Icon        string `gorm:"column:icon"`
+	}
+	var rows []row
+	// 相手は requester/receiver のうち自分でない側。
+	const q = `
+select u.id as id, u.user_id as handle,
+       u.display_name as display_name, u.icon as icon
+from friendships f
+join users u on u.id = case when f.requester_id = ? then f.receiver_id else f.requester_id end
+where f.status = 'accepted' and (f.requester_id = ? or f.receiver_id = ?)
+order by u.user_id`
+	if err := h.db.Raw(q, me.ID, me.ID, me.ID).Scan(&rows).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	friends := make([]publicUser, 0, len(rows))
+	for _, r := range rows {
+		friends = append(friends, publicUser{ID: r.ID, UserID: r.Handle, DisplayName: r.DisplayName, Icon: r.Icon})
+	}
+	return c.JSON(http.StatusOK, friendsResponse{Friends: friends})
+}
