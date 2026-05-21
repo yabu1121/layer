@@ -89,6 +89,8 @@ func authedPinEcho(db *gorm.DB) *echo.Echo {
 	api.POST("/pins", p.Create)
 	api.GET("/pins", p.List)
 	api.GET("/pins/visible", p.ListVisible)
+	api.GET("/pins/:id", p.Get)
+	api.GET("/pins/:id/nearby", p.Nearby)
 	return e
 }
 
