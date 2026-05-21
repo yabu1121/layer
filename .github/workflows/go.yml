@@ -13,13 +13,38 @@ jobs:
 
   build:
     runs-on: ubuntu-latest
+
+    # go モジュールは backend/ 配下にあるため、全 run ステップをそこで実行する。
+    defaults:
+      run:
+        working-directory: backend
+
+    # テストは PostGIS 付き PostgreSQL を必要とする（migrations/001 で postgis 拡張を作成）。
+    # 各テストパッケージの TestMain が admin DSN（postgres DB）から専用テスト DB を作成するため、
+    # 既定ユーザー postgres / パスワード postgres / DB postgres を立てれば DSN 既定値と一致する。
+    services:
+      postgres:
+        image: postgis/postgis:16-3.4
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - uses: actions/checkout@v4
 
     - name: Set up Go
-      uses: actions/setup-go@v4
+      uses: actions/setup-go@v5
       with:
-        go-version: '1.20'
+        go-version: '1.25'
+        cache-dependency-path: backend/go.sum
 
     - name: Build
       run: go build -v ./...

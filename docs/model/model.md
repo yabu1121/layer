@@ -236,4 +236,5 @@ $$;
 
 ## 6. 変更履歴
 
+- 2026-05-21: §2 が定義する外部キー制約を実スキーマに反映（issue #47, migration `005_foreign_keys.sql`）。gorm AutoMigrate は FK を生成しないため SQL マイグレーションで追加。`reactions.pin_id` のみ `on delete cascade`、他は no action。**⚠️ 適用時、親を持たない孤児行（既存 dev データ）は FK 付与前に DELETE される。**
 - 2026-05-19: 要件定義ドキュメント（require.md §8）から分離して新規作成。`get_visible_pins` RPC・RLS 方針・friendships のエッジケース注記を追加。

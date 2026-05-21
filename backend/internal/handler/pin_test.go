@@ -71,8 +71,9 @@ func setupDB(t *testing.T) *gorm.DB {
 		t.Fatalf("automigrate: %v", err)
 	}
 	// 前回の記録が残っていると 002 が skip されるため、未適用に戻してから再適用する。
+	// drop table pins cascade で pins 関連 FK（005）も落ちるので 005 も再適用させる。
 	// schema_migrations が未作成でもエラーは無視してよい（MigrateSQL が作る）。
-	_ = db.Exec("delete from schema_migrations where version = ?", "002_pin_location").Error
+	_ = db.Exec("delete from schema_migrations where version in (?, ?)", "002_pin_location", "005_foreign_keys").Error
 	if err := database.MigrateSQL(db); err != nil {
 		t.Fatalf("migrate sql: %v", err)
 	}
@@ -97,7 +98,8 @@ func authedPinEcho(db *gorm.DB) *echo.Echo {
 // seedPinUser は token "good" に対応する認証ユーザーを作る。
 func seedPinUser(t *testing.T, db *gorm.DB, displayName, icon string) string {
 	t.Helper()
-	if err := db.Exec("truncate pins, users, friendships, notifications").Error; err != nil {
+	// FK 追加後（issue #47）は reactions / pin_discoveries も pins・users を参照するため cascade で消す。
+	if err := db.Exec("truncate pins, users, friendships, notifications cascade").Error; err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	var id string

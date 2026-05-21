@@ -31,7 +31,8 @@ func setupAuthDB(t *testing.T) *gorm.DB {
 	if err := db.AutoMigrate(&model.User{}); err != nil {
 		t.Fatalf("automigrate: %v", err)
 	}
-	if err := db.Exec("truncate users").Error; err != nil {
+	// FK 追加後（issue #47）は users を参照する pins 等が共有 DB に残るため cascade で消す。
+	if err := db.Exec("truncate users cascade").Error; err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	return db

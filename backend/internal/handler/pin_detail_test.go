@@ -24,7 +24,8 @@ func seedPinReturningID(t *testing.T, db *gorm.DB, userID, body string, lat, lng
 
 func resetPinDomain(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	if err := db.Exec("truncate pins, users, friendships, notifications").Error; err != nil {
+	// FK 追加後（issue #47）は reactions / pin_discoveries も pins・users を参照するため cascade で消す。
+	if err := db.Exec("truncate pins, users, friendships, notifications cascade").Error; err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }

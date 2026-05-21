@@ -1,5 +1,8 @@
 // Package model は DB テーブルに対応する構造体を定義する。
 // スキーマの正は docs/model/model.md。変更時は両方を更新すること。
+//
+// 外部キー制約は association を定義していないため AutoMigrate では生成されない。
+// model.md §2 の FK は SQL マイグレーション（migrations/005_foreign_keys.sql）で管理する。
 package model
 
 import "time"
