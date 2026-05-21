@@ -26,14 +26,14 @@ type Friendship struct {
 }
 
 // Pin は場所への投稿。
-// 位置は本番では PostGIS の geography(point,4326)。地理空間インデックスと
-// 発見検知トリガーは SQL マイグレーションで管理する（docs/model/model.md §4）。
+// 位置 location は PostGIS の geography(point,4326)。gorm の AutoMigrate では
+// 扱えないため、location カラム・地理空間インデックス・発見検知トリガーは
+// SQL マイグレーションで管理する（migrations/002_pin_location.sql, docs/model/model.md §2,§4）。
+// API では handler が ST_X/ST_Y で lat/lng に展開して入出力する。
 type Pin struct {
 	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID    string    `gorm:"type:uuid;not null;index" json:"userId"`
 	Body      string    `gorm:"not null" json:"body"`
-	Lat       float64   `json:"lat"`
-	Lng       float64   `json:"lng"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
