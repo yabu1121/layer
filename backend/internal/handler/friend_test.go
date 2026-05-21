@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	authmw "github.com/cymed/layer/backend/internal/middleware"
 	"github.com/cymed/layer/backend/internal/model"
@@ -54,7 +55,31 @@ func friendEcho(db *gorm.DB) *echo.Echo {
 	api := e.Group("/api")
 	api.Use(authmw.RequireAuth(db, authStubVerify))
 	api.POST("/friends/requests", f.SendRequest)
+	api.POST("/friends/requests/:id/accept", f.Accept)
+	api.POST("/friends/requests/:id/reject", f.Reject)
 	return e
+}
+
+func seedFriendship(t *testing.T, db *gorm.DB, requester, receiver, status string) string {
+	t.Helper()
+	var id string
+	if err := db.Raw(
+		`insert into friendships (requester_id, receiver_id, status, created_at)
+		 values (?, ?, ?, now()) returning id`, requester, receiver, status,
+	).Row().Scan(&id); err != nil {
+		t.Fatalf("seed friendship: %v", err)
+	}
+	return id
+}
+
+func postAt(e *echo.Echo, path, token string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodPost, path, nil)
+	if token != "" {
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	}
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
 }
 
 func sendRequest(e *echo.Echo, receiverID, token string) *httptest.ResponseRecorder {
@@ -189,5 +214,84 @@ func TestSendRequest_Unauthenticated401(t *testing.T) {
 
 	if rec := sendRequest(e, bob, ""); rec.Code != http.StatusUnauthorized {
 		t.Fatalf("status = %d, want 401", rec.Code)
+	}
+}
+
+func TestAccept_SetsAcceptedAndNotifiesRequester(t *testing.T) {
+	db := setupFriendDB(t)
+	me := insertUser(t, db, "me_user", "google-sub-1")   // receiver
+	bob := insertUser(t, db, "bob", "bob-sub")           // requester
+	id := seedFriendship(t, db, bob, me, "pending")
+	e := friendEcho(db)
+
+	rec := postAt(e, "/api/friends/requests/"+id+"/accept", "good")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+
+	var status string
+	var acceptedAt *time.Time
+	if err := db.Raw(`select status, accepted_at from friendships where id = ?`, id).Row().Scan(&status, &acceptedAt); err != nil {
+		t.Fatalf("query friendship: %v", err)
+	}
+	if status != "accepted" {
+		t.Fatalf("status = %q, want accepted", status)
+	}
+	if acceptedAt == nil {
+		t.Fatal("accepted_at should be set")
+	}
+	var notif int64
+	db.Raw(`select count(*) from notifications where user_id = ? and kind = 'friend_accepted'`, bob).Scan(&notif)
+	if notif != 1 {
+		t.Fatalf("friend_accepted notifications = %d, want 1", notif)
+	}
+}
+
+func TestAccept_OthersRequestIs403(t *testing.T) {
+	db := setupFriendDB(t)
+	insertUser(t, db, "me_user", "google-sub-1")
+	bob := insertUser(t, db, "bob", "bob-sub")
+	carol := insertUser(t, db, "carol", "carol-sub")
+	// receiver は carol（自分=me_user ではない）。
+	id := seedFriendship(t, db, bob, carol, "pending")
+	e := friendEcho(db)
+
+	if rec := postAt(e, "/api/friends/requests/"+id+"/accept", "good"); rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestReject_SetsRejectedNoNotification(t *testing.T) {
+	db := setupFriendDB(t)
+	me := insertUser(t, db, "me_user", "google-sub-1")
+	bob := insertUser(t, db, "bob", "bob-sub")
+	id := seedFriendship(t, db, bob, me, "pending")
+	e := friendEcho(db)
+
+	rec := postAt(e, "/api/friends/requests/"+id+"/reject", "good")
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want 204", rec.Code)
+	}
+	if got := friendshipStatus(t, db, bob, me); got != "rejected" {
+		t.Fatalf("status = %q, want rejected", got)
+	}
+	var notif int64
+	db.Raw(`select count(*) from notifications`).Scan(&notif)
+	if notif != 0 {
+		t.Fatalf("notifications = %d, want 0 (reject is silent)", notif)
+	}
+}
+
+func TestAcceptReject_MissingIDIs404(t *testing.T) {
+	db := setupFriendDB(t)
+	insertUser(t, db, "me_user", "google-sub-1")
+	e := friendEcho(db)
+
+	missing := "00000000-0000-0000-0000-000000000000"
+	if rec := postAt(e, "/api/friends/requests/"+missing+"/accept", "good"); rec.Code != http.StatusNotFound {
+		t.Fatalf("accept status = %d, want 404", rec.Code)
+	}
+	if rec := postAt(e, "/api/friends/requests/"+missing+"/reject", "good"); rec.Code != http.StatusNotFound {
+		t.Fatalf("reject status = %d, want 404", rec.Code)
 	}
 }
