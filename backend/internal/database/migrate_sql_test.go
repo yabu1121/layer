@@ -100,6 +100,12 @@ func TestMigrateSQL_AppliesAndIsIdempotent(t *testing.T) {
 		t.Fatalf("pins.location udt_name = %q (err=%v), want \"geography\"", udtName, err)
 	}
 
+	// 004: users.created_at が not null + default を持つ。
+	var uNullable, uDefault string
+	if err := db.Raw("select is_nullable, coalesce(column_default,'') from information_schema.columns where table_name = 'users' and column_name = 'created_at'").Row().Scan(&uNullable, &uDefault); err != nil || uNullable != "NO" || uDefault == "" {
+		t.Fatalf("users.created_at is_nullable=%q default=%q (err=%v), want NO + non-empty default", uNullable, uDefault, err)
+	}
+
 	// 二度目は no-op（行数が増えず、ファイル数と一致する）。
 	if err := MigrateSQL(db); err != nil {
 		t.Fatalf("second MigrateSQL: %v", err)
