@@ -26,6 +26,7 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	user := handler.NewUserHandler(db)
 	friend := handler.NewFriendHandler(db)
 	reaction := handler.NewReactionHandler(db)
+	notif := handler.NewNotificationHandler(db)
 
 	// /api/* は認証必須。サインイン／サインアウトは認証前に叩くため除外する。
 	api := e.Group("/api")
@@ -48,6 +49,9 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	api.GET("/pins/:id/reactions", reaction.List)
 	api.POST("/pins/:id/reactions", reaction.Create)
 	api.DELETE("/pins/:id/reactions/me", reaction.DeleteMine)
+	api.GET("/notifications", notif.List)
+	api.POST("/notifications/read-all", notif.ReadAll)
+	api.GET("/notifications/unread-count", notif.UnreadCount)
 
 	return e
 }
