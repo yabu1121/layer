@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"math"
 	"net/http"
-	"net/http/httptest"
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/cymed/layer/backend/internal/database"
+	authmw "github.com/cymed/layer/backend/internal/middleware"
 	"github.com/labstack/echo/v4"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
@@ -78,46 +79,85 @@ func setupDB(t *testing.T) *gorm.DB {
 	return db
 }
 
-// 受け入れ基準: POST /api/pins で行が増え、GET /api/pins のレスポンスに
-// lat/lng が含まれること。geography への往復で値が保たれることを確認する。
+// authedPinEcho は auth ミドルウェア込みで Pin ルートを登録した echo を返す。
+// 認証は authStubVerify（auth_test.go）で "good" -> "google-sub-1"。
+func authedPinEcho(db *gorm.DB) *echo.Echo {
+	e := echo.New()
+	p := NewPinHandler(db)
+	api := e.Group("/api")
+	api.Use(authmw.RequireAuth(db, authStubVerify))
+	api.POST("/pins", p.Create)
+	api.GET("/pins", p.List)
+	return e
+}
+
+// seedPinUser は token "good" に対応する認証ユーザーを作る。
+func seedPinUser(t *testing.T, db *gorm.DB, displayName, icon string) string {
+	t.Helper()
+	if err := db.Exec("truncate pins, users, friendships, notifications").Error; err != nil {
+		t.Fatalf("truncate: %v", err)
+	}
+	var id string
+	if err := db.Raw(
+		`insert into users (user_id, display_name, icon, auth_provider, auth_uid)
+		 values ('me_user', ?, ?, 'google', 'google-sub-1') returning id`, displayName, icon,
+	).Row().Scan(&id); err != nil {
+		t.Fatalf("seed user: %v", err)
+	}
+	return id
+}
+
+// 受け入れ基準: POST /api/pins で行が増え、レスポンスに lat/lng と author が含まれ、
+// GET /api/pins で取得できること。
 func TestPinHandler_CreateAndList(t *testing.T) {
 	db := setupDB(t)
-	h := NewPinHandler(db)
-	e := echo.New()
+	meID := seedPinUser(t, db, "Me", "🙂")
+	e := authedPinEcho(db)
 
 	const (
 		wantLat = 35.681236
 		wantLng = 139.767125
 	)
-	body := `{"userId":"11111111-1111-1111-1111-111111111111","body":"いい場所","lat":35.681236,"lng":139.767125}`
-	rec := httptest.NewRecorder()
-	req := httptest.NewRequest(http.MethodPost, "/api/pins", strings.NewReader(body))
-	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
-	if err := h.Create(e.NewContext(req, rec)); err != nil {
-		t.Fatalf("Create: %v", err)
-	}
+	rec := serveAuth(e, http.MethodPost, "/api/pins", "good", `{"body":"いい場所","lat":35.681236,"lng":139.767125}`)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("create status = %d, body = %s", rec.Code, rec.Body.String())
 	}
-	var created pinResponse
+	var created struct {
+		Pin struct {
+			ID        string    `json:"id"`
+			UserID    string    `json:"userId"`
+			Body      string    `json:"body"`
+			Lat       float64   `json:"lat"`
+			Lng       float64   `json:"lng"`
+			CreatedAt time.Time `json:"createdAt"`
+			Author    struct {
+				ID          string `json:"id"`
+				UserID      string `json:"userId"`
+				DisplayName string `json:"displayName"`
+				Icon        string `json:"icon"`
+			} `json:"author"`
+		} `json:"pin"`
+	}
 	if err := json.Unmarshal(rec.Body.Bytes(), &created); err != nil {
 		t.Fatalf("decode create: %v", err)
 	}
-	if created.ID == "" {
+	if created.Pin.ID == "" {
 		t.Fatal("expected created id")
 	}
-	if created.CreatedAt.IsZero() {
+	if created.Pin.UserID != meID {
+		t.Fatalf("pin userId = %q, want %q", created.Pin.UserID, meID)
+	}
+	if created.Pin.CreatedAt.IsZero() {
 		t.Fatal("expected createdAt to be set")
 	}
-	if !almostEqual(created.Lat, wantLat) || !almostEqual(created.Lng, wantLng) {
-		t.Fatalf("create lat/lng = (%v,%v), want (%v,%v)", created.Lat, created.Lng, wantLat, wantLng)
+	if !almostEqual(created.Pin.Lat, wantLat) || !almostEqual(created.Pin.Lng, wantLng) {
+		t.Fatalf("create lat/lng = (%v,%v), want (%v,%v)", created.Pin.Lat, created.Pin.Lng, wantLat, wantLng)
+	}
+	if created.Pin.Author.DisplayName != "Me" || created.Pin.Author.Icon != "🙂" {
+		t.Fatalf("author = %+v, want Me/🙂", created.Pin.Author)
 	}
 
-	rec = httptest.NewRecorder()
-	req = httptest.NewRequest(http.MethodGet, "/api/pins", nil)
-	if err := h.List(e.NewContext(req, rec)); err != nil {
-		t.Fatalf("List: %v", err)
-	}
+	rec = serveAuth(e, http.MethodGet, "/api/pins", "good", "")
 	if rec.Code != http.StatusOK {
 		t.Fatalf("list status = %d", rec.Code)
 	}
@@ -130,6 +170,39 @@ func TestPinHandler_CreateAndList(t *testing.T) {
 	}
 	if !almostEqual(list[0].Lat, wantLat) || !almostEqual(list[0].Lng, wantLng) {
 		t.Fatalf("list lat/lng = (%v,%v), want (%v,%v)", list[0].Lat, list[0].Lng, wantLat, wantLng)
+	}
+}
+
+func TestPinCreate_Validation(t *testing.T) {
+	db := setupDB(t)
+	seedPinUser(t, db, "Me", "🙂")
+	e := authedPinEcho(db)
+
+	long := strings.Repeat("a", 201)
+	cases := map[string]string{
+		"empty body":       `{"body":"","lat":35.0,"lng":139.0}`,
+		"whitespace body":  `{"body":"   ","lat":35.0,"lng":139.0}`,
+		"too long body":    `{"body":"` + long + `","lat":35.0,"lng":139.0}`,
+		"missing lat":      `{"body":"x","lng":139.0}`,
+		"missing lng":      `{"body":"x","lat":35.0}`,
+		"lat out of range": `{"body":"x","lat":91.0,"lng":139.0}`,
+		"lng out of range": `{"body":"x","lat":35.0,"lng":181.0}`,
+	}
+	for name, b := range cases {
+		t.Run(name, func(t *testing.T) {
+			if rec := serveAuth(e, http.MethodPost, "/api/pins", "good", b); rec.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400 (%s)", rec.Code, rec.Body.String())
+			}
+		})
+	}
+}
+
+func TestPinCreate_Unauthenticated401(t *testing.T) {
+	db := setupDB(t)
+	e := authedPinEcho(db)
+
+	if rec := serveAuth(e, http.MethodPost, "/api/pins", "", `{"body":"x","lat":35.0,"lng":139.0}`); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want 401", rec.Code)
 	}
 }
 
