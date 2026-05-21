@@ -6,6 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/cymed/layer/backend/internal/access"
 	authmw "github.com/cymed/layer/backend/internal/middleware"
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
@@ -52,6 +53,34 @@ type createdPin struct {
 type createPinResponse struct {
 	Pin createdPin `json:"pin"`
 }
+
+// pinRow は author 込みで Pin を取得する共通スキャン先。
+type pinRow struct {
+	ID                string    `gorm:"column:id"`
+	UserID            string    `gorm:"column:user_id"`
+	Body              string    `gorm:"column:body"`
+	Lat               float64   `gorm:"column:lat"`
+	Lng               float64   `gorm:"column:lng"`
+	CreatedAt         time.Time `gorm:"column:created_at"`
+	AuthorID          string    `gorm:"column:author_id"`
+	AuthorUserID      string    `gorm:"column:author_user_id"`
+	AuthorDisplayName string    `gorm:"column:author_display_name"`
+	AuthorIcon        string    `gorm:"column:author_icon"`
+}
+
+func (r pinRow) toCreatedPin() createdPin {
+	return createdPin{
+		ID: r.ID, UserID: r.UserID, Body: r.Body, Lat: r.Lat, Lng: r.Lng, CreatedAt: r.CreatedAt,
+		Author: pinAuthor{ID: r.AuthorID, UserID: r.AuthorUserID, DisplayName: r.AuthorDisplayName, Icon: r.AuthorIcon},
+	}
+}
+
+// pinWithAuthorColumns は pins p ↔ users u を JOIN した select 句（lat/lng と author を展開）。
+const pinWithAuthorColumns = `p.id as id, p.user_id as user_id, p.body as body,
+	st_y(p.location::geometry) as lat, st_x(p.location::geometry) as lng,
+	p.created_at as created_at,
+	u.id as author_id, u.user_id as author_user_id,
+	u.display_name as author_display_name, u.icon as author_icon`
 
 // pinResponse は Pin の API レスポンス。geography の location は lat/lng に
 // 展開して返し、JSON 上の契約は移行前と変えない。
@@ -141,30 +170,14 @@ func (h *PinHandler) ListVisible(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
 	}
 
-	type row struct {
-		ID                string `gorm:"column:id"`
-		UserID            string `gorm:"column:user_id"`
-		Body              string `gorm:"column:body"`
-		Lat               float64
-		Lng               float64
-		CreatedAt         time.Time `gorm:"column:created_at"`
-		AuthorID          string    `gorm:"column:author_id"`
-		AuthorUserID      string    `gorm:"column:author_user_id"`
-		AuthorDisplayName string    `gorm:"column:author_display_name"`
-		AuthorIcon        string    `gorm:"column:author_icon"`
-	}
-	var rows []row
+	var rows []pinRow
 	const q = `
 with my_friends as (
   select case when requester_id = ? then receiver_id else requester_id end as friend_id
   from friendships
   where status = 'accepted' and (requester_id = ? or receiver_id = ?)
 )
-select p.id as id, p.user_id as user_id, p.body as body,
-       st_y(p.location::geometry) as lat, st_x(p.location::geometry) as lng,
-       p.created_at as created_at,
-       u.id as author_id, u.user_id as author_user_id,
-       u.display_name as author_display_name, u.icon as author_icon
+select ` + pinWithAuthorColumns + `
 from pins p
 join users u on u.id = p.user_id
 where p.user_id = ? or p.user_id in (select friend_id from my_friends)
@@ -175,15 +188,78 @@ order by p.created_at desc`
 
 	pins := make([]createdPin, 0, len(rows))
 	for _, r := range rows {
-		pins = append(pins, createdPin{
-			ID:        r.ID,
-			UserID:    r.UserID,
-			Body:      r.Body,
-			Lat:       r.Lat,
-			Lng:       r.Lng,
-			CreatedAt: r.CreatedAt,
-			Author:    pinAuthor{ID: r.AuthorID, UserID: r.AuthorUserID, DisplayName: r.AuthorDisplayName, Icon: r.AuthorIcon},
-		})
+		pins = append(pins, r.toCreatedPin())
+	}
+	return c.JSON(http.StatusOK, visiblePinsResponse{Pins: pins})
+}
+
+// Get は Pin 詳細を返す（FR-5.1）。自分の Pin か IsFriend でなければ 403、無ければ 404。
+func (h *PinHandler) Get(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+
+	var r pinRow
+	const q = `select ` + pinWithAuthorColumns + `
+from pins p join users u on u.id = p.user_id
+where p.id = ?`
+	if err := h.db.Raw(q, c.Param("id")).Scan(&r).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if r.ID == "" {
+		return echo.NewHTTPError(http.StatusNotFound, "pin not found")
+	}
+	if r.UserID != me.ID {
+		friends, err := access.IsFriend(h.db, me.ID, r.UserID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if !friends {
+			return echo.NewHTTPError(http.StatusForbidden, "not allowed")
+		}
+	}
+	return c.JSON(http.StatusOK, createPinResponse{Pin: r.toCreatedPin()})
+}
+
+// Nearby は基準 Pin の半径 20m 以内にある自分＋友達の Pin を返す（FR-5.2 / model.md §3.2）。
+// 基準 Pin 自身は除外。基準 Pin が無ければ 404。
+func (h *PinHandler) Nearby(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+
+	id := c.Param("id")
+	var baseID string
+	if err := h.db.Raw(`select id from pins where id = ?`, id).Scan(&baseID).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if baseID == "" {
+		return echo.NewHTTPError(http.StatusNotFound, "pin not found")
+	}
+
+	var rows []pinRow
+	const q = `
+with my_friends as (
+  select case when requester_id = ? then receiver_id else requester_id end as friend_id
+  from friendships
+  where status = 'accepted' and (requester_id = ? or receiver_id = ?)
+)
+select ` + pinWithAuthorColumns + `
+from pins p
+join users u on u.id = p.user_id
+where p.id <> ?
+  and ST_DWithin(p.location, (select location from pins where id = ?), 20)
+  and (p.user_id = ? or p.user_id in (select friend_id from my_friends))
+order by p.created_at desc`
+	if err := h.db.Raw(q, me.ID, me.ID, me.ID, id, id, me.ID).Scan(&rows).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	pins := make([]createdPin, 0, len(rows))
+	for _, r := range rows {
+		pins = append(pins, r.toCreatedPin())
 	}
 	return c.JSON(http.StatusOK, visiblePinsResponse{Pins: pins})
 }
