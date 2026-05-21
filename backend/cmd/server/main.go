@@ -6,6 +6,7 @@ import (
 
 	"github.com/cymed/layer/backend/internal/config"
 	"github.com/cymed/layer/backend/internal/database"
+	authmw "github.com/cymed/layer/backend/internal/middleware"
 	"github.com/cymed/layer/backend/internal/router"
 )
 
@@ -25,7 +26,8 @@ func main() {
 		log.Fatalf("failed to apply SQL migrations: %v", err)
 	}
 
-	e := router.New(db)
+	verify := authmw.GoogleVerifier(cfg.GoogleOAuthClientID)
+	e := router.New(db, verify)
 
 	port := cfg.Port
 	if port == "" {
