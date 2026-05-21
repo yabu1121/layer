@@ -2,6 +2,7 @@ package database
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"gorm.io/driver/postgres"
@@ -45,7 +46,7 @@ func ensureTestDatabase() {
 	}
 }
 
-// TestMigrateSQL は 001_init_postgis が適用され、二度目の呼び出しは no-op に
+// TestMigrateSQL は migrations/ 配下が全て適用され、二度目の呼び出しは no-op に
 // なることを確認する。DB が無い環境ではスキップする。
 func TestMigrateSQL_AppliesAndIsIdempotent(t *testing.T) {
 	dsn := os.Getenv("TEST_DATABASE_URL")
@@ -61,18 +62,30 @@ func TestMigrateSQL_AppliesAndIsIdempotent(t *testing.T) {
 		t.Fatalf("drop schema_migrations: %v", err)
 	}
 
+	// 002 以降は pins テーブルの存在を前提とする。本番は AutoMigrate → MigrateSQL の
+	// 順で走るため、テストでも同じ順序を再現する。
+	if err := Migrate(db); err != nil {
+		t.Fatalf("AutoMigrate: %v", err)
+	}
+
 	if err := MigrateSQL(db); err != nil {
 		t.Fatalf("first MigrateSQL: %v", err)
 	}
 
-	var version string
-	if err := db.Raw("select version from schema_migrations where version = ?", "001_init_postgis").Scan(&version).Error; err != nil {
-		t.Fatalf("query schema_migrations: %v", err)
+	// migrations/ の全ファイルが記録されている。
+	names, err := listMigrations()
+	if err != nil {
+		t.Fatalf("listMigrations: %v", err)
 	}
-	if version != "001_init_postgis" {
-		t.Fatalf("expected 001_init_postgis applied, got %q", version)
+	for _, name := range names {
+		version := strings.TrimSuffix(name, ".sql")
+		var got string
+		if err := db.Raw("select version from schema_migrations where version = ?", version).Scan(&got).Error; err != nil || got != version {
+			t.Fatalf("migration %q not recorded (got %q, err=%v)", version, got, err)
+		}
 	}
 
+	// 001: PostGIS 拡張が有効。
 	var postgisVersion string
 	if err := db.Raw("select postgis_version()").Scan(&postgisVersion).Error; err != nil {
 		t.Fatalf("postgis_version: %v", err)
@@ -81,6 +94,13 @@ func TestMigrateSQL_AppliesAndIsIdempotent(t *testing.T) {
 		t.Fatal("postgis_version() returned empty")
 	}
 
+	// 002: pins.location が geography で存在する。
+	var udtName string
+	if err := db.Raw("select udt_name from information_schema.columns where table_name = 'pins' and column_name = 'location'").Scan(&udtName).Error; err != nil || udtName != "geography" {
+		t.Fatalf("pins.location udt_name = %q (err=%v), want \"geography\"", udtName, err)
+	}
+
+	// 二度目は no-op（行数が増えず、ファイル数と一致する）。
 	if err := MigrateSQL(db); err != nil {
 		t.Fatalf("second MigrateSQL: %v", err)
 	}
@@ -88,8 +108,8 @@ func TestMigrateSQL_AppliesAndIsIdempotent(t *testing.T) {
 	if err := db.Raw("select count(*) from schema_migrations").Scan(&count).Error; err != nil {
 		t.Fatalf("count schema_migrations: %v", err)
 	}
-	if count != 1 {
-		t.Fatalf("expected 1 row in schema_migrations, got %d", count)
+	if count != int64(len(names)) {
+		t.Fatalf("expected %d rows in schema_migrations, got %d", len(names), count)
 	}
 }
 
