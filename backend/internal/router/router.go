@@ -35,6 +35,8 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	api.POST("/me/profile", me.UpdateProfile)
 	api.GET("/users/search", user.Search)
 	api.POST("/friends/requests", friend.SendRequest)
+	api.POST("/friends/requests/:id/accept", friend.Accept)
+	api.POST("/friends/requests/:id/reject", friend.Reject)
 	api.GET("/pins", pin.List)
 	api.POST("/pins", pin.Create)
 
