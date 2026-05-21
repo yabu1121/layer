@@ -24,6 +24,7 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	auth := handler.NewAuthHandler(db, verify)
 	me := handler.NewMeHandler(db)
 	user := handler.NewUserHandler(db)
+	friend := handler.NewFriendHandler(db)
 
 	// /api/* は認証必須。サインイン／サインアウトは認証前に叩くため除外する。
 	api := e.Group("/api")
@@ -33,6 +34,7 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	api.GET("/me", me.Get)
 	api.POST("/me/profile", me.UpdateProfile)
 	api.GET("/users/search", user.Search)
+	api.POST("/friends/requests", friend.SendRequest)
 	api.GET("/pins", pin.List)
 	api.POST("/pins", pin.Create)
 
