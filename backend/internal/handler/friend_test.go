@@ -54,10 +54,22 @@ func friendEcho(db *gorm.DB) *echo.Echo {
 	f := NewFriendHandler(db)
 	api := e.Group("/api")
 	api.Use(authmw.RequireAuth(db, authStubVerify))
+	api.GET("/friends", f.ListFriends)
 	api.POST("/friends/requests", f.SendRequest)
+	api.GET("/friends/requests/incoming", f.ListIncoming)
 	api.POST("/friends/requests/:id/accept", f.Accept)
 	api.POST("/friends/requests/:id/reject", f.Reject)
 	return e
+}
+
+func getAt(e *echo.Echo, path, token string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, path, nil)
+	if token != "" {
+		req.Header.Set(echo.HeaderAuthorization, "Bearer "+token)
+	}
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+	return rec
 }
 
 func seedFriendship(t *testing.T, db *gorm.DB, requester, receiver, status string) string {
@@ -293,5 +305,97 @@ func TestAcceptReject_MissingIDIs404(t *testing.T) {
 	}
 	if rec := postAt(e, "/api/friends/requests/"+missing+"/reject", "good"); rec.Code != http.StatusNotFound {
 		t.Fatalf("reject status = %d, want 404", rec.Code)
+	}
+}
+
+func TestListIncoming_OnlyMyPending(t *testing.T) {
+	db := setupFriendDB(t)
+	me := insertUser(t, db, "me_user", "google-sub-1")
+	bob := insertUser(t, db, "bob", "bob-sub")
+	carol := insertUser(t, db, "carol", "carol-sub")
+	seedFriendship(t, db, bob, me, "pending")     // 受信 pending → 出る
+	seedFriendship(t, db, carol, me, "accepted")  // 受信だが accepted → 出ない
+	seedFriendship(t, db, me, carol, "pending")   // 自分発信 pending → 出ない
+	e := friendEcho(db)
+
+	rec := getAt(e, "/api/friends/requests/incoming", "good")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Requests []struct {
+			ID        string `json:"id"`
+			Requester struct {
+				UserID string `json:"userId"`
+			} `json:"requester"`
+		} `json:"requests"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got.Requests) != 1 {
+		t.Fatalf("incoming = %d, want 1 (%s)", len(got.Requests), rec.Body.String())
+	}
+	if got.Requests[0].Requester.UserID != "bob" {
+		t.Fatalf("requester = %q, want bob", got.Requests[0].Requester.UserID)
+	}
+}
+
+func TestListFriends_OnlyAcceptedBothDirections(t *testing.T) {
+	db := setupFriendDB(t)
+	me := insertUser(t, db, "me_user", "google-sub-1")
+	bob := insertUser(t, db, "bob", "bob-sub")
+	carol := insertUser(t, db, "carol", "carol-sub")
+	dave := insertUser(t, db, "dave", "dave-sub")
+	seedFriendship(t, db, me, bob, "accepted")    // 自分発信 accepted → 友達
+	seedFriendship(t, db, carol, me, "accepted")  // 受信 accepted → 友達
+	seedFriendship(t, db, me, dave, "pending")    // pending → 友達でない
+	e := friendEcho(db)
+
+	rec := getAt(e, "/api/friends", "good")
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want 200 (%s)", rec.Code, rec.Body.String())
+	}
+	var got struct {
+		Friends []struct {
+			UserID string `json:"userId"`
+		} `json:"friends"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	handles := map[string]bool{}
+	for _, f := range got.Friends {
+		handles[f.UserID] = true
+	}
+	if len(got.Friends) != 2 || !handles["bob"] || !handles["carol"] || handles["dave"] {
+		t.Fatalf("friends = %v, want exactly bob+carol", handles)
+	}
+}
+
+func TestFriendLists_EmptyAreArrays(t *testing.T) {
+	db := setupFriendDB(t)
+	insertUser(t, db, "me_user", "google-sub-1")
+	e := friendEcho(db)
+
+	rec := getAt(e, "/api/friends", "good")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"friends":[]`) {
+		t.Fatalf("friends empty: code=%d body=%s, want 200 + []", rec.Code, rec.Body.String())
+	}
+	rec = getAt(e, "/api/friends/requests/incoming", "good")
+	if rec.Code != http.StatusOK || !strings.Contains(rec.Body.String(), `"requests":[]`) {
+		t.Fatalf("incoming empty: code=%d body=%s, want 200 + []", rec.Code, rec.Body.String())
+	}
+}
+
+func TestFriendLists_Unauthenticated401(t *testing.T) {
+	db := setupFriendDB(t)
+	e := friendEcho(db)
+
+	if rec := getAt(e, "/api/friends", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("friends status = %d, want 401", rec.Code)
+	}
+	if rec := getAt(e, "/api/friends/requests/incoming", ""); rec.Code != http.StatusUnauthorized {
+		t.Fatalf("incoming status = %d, want 401", rec.Code)
 	}
 }
