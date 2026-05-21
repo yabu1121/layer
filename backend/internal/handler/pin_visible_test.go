@@ -44,7 +44,8 @@ type visibleBody struct {
 
 func TestListVisible_OwnAndFriendsOnly(t *testing.T) {
 	db := setupDB(t)
-	if err := db.Exec("truncate pins, users, friendships, notifications").Error; err != nil {
+	// FK 追加後（issue #47）は reactions / pin_discoveries も pins・users を参照するため cascade で消す。
+	if err := db.Exec("truncate pins, users, friendships, notifications cascade").Error; err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	me := seedNamedUser(t, db, "me_user", "google-sub-1", "Me", "🙂")
@@ -89,7 +90,8 @@ func TestListVisible_OwnAndFriendsOnly(t *testing.T) {
 
 func TestListVisible_EmptyIsArray(t *testing.T) {
 	db := setupDB(t)
-	if err := db.Exec("truncate pins, users, friendships, notifications").Error; err != nil {
+	// FK 追加後（issue #47）は reactions / pin_discoveries も pins・users を参照するため cascade で消す。
+	if err := db.Exec("truncate pins, users, friendships, notifications cascade").Error; err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 	seedNamedUser(t, db, "me_user", "google-sub-1", "Me", "🙂")

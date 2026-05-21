@@ -37,7 +37,8 @@ func openDiscoveryDB(t *testing.T) *gorm.DB {
 
 func resetDiscoveryData(t *testing.T, db *gorm.DB) {
 	t.Helper()
-	if err := db.Exec("truncate users, pins, friendships, pin_discoveries, notifications").Error; err != nil {
+	// FK 追加後（issue #47）は reactions も pins・users を参照するため cascade で消す。
+	if err := db.Exec("truncate users, pins, friendships, pin_discoveries, notifications cascade").Error; err != nil {
 		t.Fatalf("truncate: %v", err)
 	}
 }
