@@ -128,3 +128,62 @@ func (h *PinHandler) Create(c echo.Context) error {
 		Author:    pinAuthor{ID: me.ID, UserID: me.UserID, DisplayName: me.DisplayName, Icon: me.Icon},
 	}})
 }
+
+type visiblePinsResponse struct {
+	Pins []createdPin `json:"pins"`
+}
+
+// ListVisible は自分と accepted な友達の Pin を投稿者情報つきで返す
+// （FR-4.2 / model.md §3.1 get_visible_pins 相当）。
+func (h *PinHandler) ListVisible(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+
+	type row struct {
+		ID                string `gorm:"column:id"`
+		UserID            string `gorm:"column:user_id"`
+		Body              string `gorm:"column:body"`
+		Lat               float64
+		Lng               float64
+		CreatedAt         time.Time `gorm:"column:created_at"`
+		AuthorID          string    `gorm:"column:author_id"`
+		AuthorUserID      string    `gorm:"column:author_user_id"`
+		AuthorDisplayName string    `gorm:"column:author_display_name"`
+		AuthorIcon        string    `gorm:"column:author_icon"`
+	}
+	var rows []row
+	const q = `
+with my_friends as (
+  select case when requester_id = ? then receiver_id else requester_id end as friend_id
+  from friendships
+  where status = 'accepted' and (requester_id = ? or receiver_id = ?)
+)
+select p.id as id, p.user_id as user_id, p.body as body,
+       st_y(p.location::geometry) as lat, st_x(p.location::geometry) as lng,
+       p.created_at as created_at,
+       u.id as author_id, u.user_id as author_user_id,
+       u.display_name as author_display_name, u.icon as author_icon
+from pins p
+join users u on u.id = p.user_id
+where p.user_id = ? or p.user_id in (select friend_id from my_friends)
+order by p.created_at desc`
+	if err := h.db.Raw(q, me.ID, me.ID, me.ID, me.ID).Scan(&rows).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+
+	pins := make([]createdPin, 0, len(rows))
+	for _, r := range rows {
+		pins = append(pins, createdPin{
+			ID:        r.ID,
+			UserID:    r.UserID,
+			Body:      r.Body,
+			Lat:       r.Lat,
+			Lng:       r.Lng,
+			CreatedAt: r.CreatedAt,
+			Author:    pinAuthor{ID: r.AuthorID, UserID: r.AuthorUserID, DisplayName: r.AuthorDisplayName, Icon: r.AuthorIcon},
+		})
+	}
+	return c.JSON(http.StatusOK, visiblePinsResponse{Pins: pins})
+}

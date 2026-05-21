@@ -88,6 +88,7 @@ func authedPinEcho(db *gorm.DB) *echo.Echo {
 	api.Use(authmw.RequireAuth(db, authStubVerify))
 	api.POST("/pins", p.Create)
 	api.GET("/pins", p.List)
+	api.GET("/pins/visible", p.ListVisible)
 	return e
 }
 
