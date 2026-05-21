@@ -9,8 +9,9 @@ import (
 
 // Config はアプリ全体の設定値を保持する。
 type Config struct {
-	Port        string
-	DatabaseURL string
+	Port                string
+	DatabaseURL         string
+	GoogleOAuthClientID string
 }
 
 // Load は .env と環境変数から設定を読み込む。
@@ -19,7 +20,8 @@ func Load() *Config {
 		log.Println("no .env file found, using environment variables")
 	}
 	return &Config{
-		Port:        os.Getenv("PORT"),
-		DatabaseURL: os.Getenv("DATABASE_URL"),
+		Port:                os.Getenv("PORT"),
+		DatabaseURL:         os.Getenv("DATABASE_URL"),
+		GoogleOAuthClientID: os.Getenv("GOOGLE_OAUTH_CLIENT_ID"),
 	}
 }
