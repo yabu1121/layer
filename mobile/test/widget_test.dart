@@ -5,7 +5,7 @@ import 'package:layer/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('LayerApp はトークン無しのとき SignIn へ振り分ける',
+  testWidgets('LayerApp はトークン無しのとき SignInScreen へ振り分ける',
       (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
@@ -20,7 +20,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // SplashScreen → トークン無し → /signin（Placeholder）。
-    expect(find.text('SignIn'), findsOneWidget);
+    // SplashScreen → トークン無し → /signin（SignInScreen）。
+    expect(find.text('Google でサインイン'), findsOneWidget);
   });
 }
