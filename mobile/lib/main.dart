@@ -1,41 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import 'app/router.dart';
+import 'core/auth/auth_storage.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await dotenv.load(fileName: '.env');
-  runApp(const ProviderScope(child: LayerApp()));
+  final prefs = await SharedPreferences.getInstance();
+  runApp(
+    ProviderScope(
+      overrides: [
+        sharedPreferencesProvider.overrideWithValue(prefs),
+      ],
+      child: const LayerApp(),
+    ),
+  );
 }
 
-class LayerApp extends StatelessWidget {
+class LayerApp extends ConsumerWidget {
   const LayerApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    return MaterialApp(
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
+    return MaterialApp.router(
       title: 'Layer',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
         useMaterial3: true,
       ),
-      home: const _Placeholder(),
-    );
-  }
-}
-
-class _Placeholder extends StatelessWidget {
-  const _Placeholder();
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: Text(
-          'Layer',
-          style: Theme.of(context).textTheme.headlineMedium,
-        ),
-      ),
+      routerConfig: router,
     );
   }
 }
