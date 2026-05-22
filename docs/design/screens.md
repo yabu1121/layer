@@ -23,6 +23,37 @@
 
 ---
 
+## 1.1 データ層・認証の前提（実装基盤）
+
+各画面の State は Riverpod で実装し、データ取得は **Go バックエンドの REST API** を dio で叩く（Supabase は使用しない）。
+
+- **API クライアント**: `apiClientProvider`（dio）。baseUrl は `.env` の `API_BASE_URL`。
+- **認証**: `google_sign_in` で取得した **ID トークン**を `authStorageProvider`（shared_preferences）に保存し、`Authorization: Bearer <id_token>` として全リクエストに自動付与する。バックエンドが毎回トークンを検証する（サーバ側セッションは持たない）。
+- **JSON 規約**: **レスポンスの User / Pin 等は camelCase**（`displayName`, `userId`, `createdAt`）。一方 **リクエストボディは snake_case**（`id_token`, `display_name`, `user_id`, `receiver_id`）。`backend/internal/handler/*.go` の定義を正とする。
+- **基盤実装**: #29（ApiClient / auth ストレージ / go_router）。各画面 State は #30 以降で順次実装する。
+
+### 主なエンドポイント
+
+| 用途 | メソッド・パス | 補足 |
+|---|---|---|
+| サインイン | `POST /api/auth/sign-in` | body `{id_token}` → `{user, is_new}` |
+| サインアウト | `POST /api/auth/sign-out` | 204 |
+| 自分の取得 | `GET /api/me` | `{user}` |
+| プロフィール更新 | `POST /api/me/profile` | body `{display_name, icon, user_id}`、重複は 409 `user_id_taken` |
+| ユーザー検索 | `GET /api/users/search?user_id=` | 完全一致 `{user}`、不在は 404 |
+| 友達一覧 | `GET /api/friends` | `{friends: [...]}` |
+| 申請送信 | `POST /api/friends/requests` | body `{receiver_id}`、409 `already_requested` / `already_friends` |
+| 受信申請 | `GET /api/friends/requests/incoming` | `{requests: [{id, requester}]}` |
+| 承認 / 拒否 | `POST /api/friends/requests/:id/accept` / `/reject` | accept は `{friendship}`、reject は 204 |
+| 可視 Pin | `GET /api/pins/visible` | 自分 + 友達 `{pins}` |
+| Pin 詳細 / 近傍 | `GET /api/pins/:id` / `/nearby` | `{pin}` / `{pins}` |
+| Pin 投稿 | `POST /api/pins` | body `{body, lat, lng}` → 201 `{pin}` |
+| わかる 追加 / 取消 | `POST` / `DELETE /api/pins/:id/reactions[/me]` | kind は `wakaru` 固定（ボディ不要）、重複は 409 |
+| 通知一覧 / 既読化 | `GET /api/notifications` / `POST /api/notifications/read-all` | 一覧は `{notifications}`、既読化は `{updated}` |
+| 未読数 | `GET /api/notifications/unread-count` | `{count}` |
+
+---
+
 ## 2. 画面詳細
 
 ### 2.1 SplashScreen
@@ -34,19 +65,26 @@
 **State**:
 
 ```dart
-@riverpod
-class SplashController extends _$SplashController {
-  @override
-  Future<AuthCheckResult> build() async {
-    final session = supabase.auth.currentSession;
-    if (session == null) return AuthCheckResult.unauthenticated;
+// 実装: mobile/lib/features/splash/splash_controller.dart（#30）
+enum SplashDestination { signIn, onboarding, map }
 
-    final hasProfile = await _checkProfileExists(session.user.id);
-    return hasProfile
-      ? AuthCheckResult.ready
-      : AuthCheckResult.needsOnboarding;
+final splashDestinationProvider = FutureProvider<SplashDestination>((ref) async {
+  final token = ref.watch(authStorageProvider).readIdToken();
+  if (token == null || token.isEmpty) return SplashDestination.signIn;
+
+  try {
+    final res = await ref.watch(apiClientProvider)
+        .get<Map<String, dynamic>>('/api/me');
+    final user = User.fromJson((res.data!['user'] as Map).cast<String, dynamic>());
+    return user.hasProfile ? SplashDestination.map : SplashDestination.onboarding;
+  } on DioException catch (e) {
+    if (e.response?.statusCode == 401) {           // トークン失効
+      await ref.read(authStorageProvider).clear();
+      return SplashDestination.signIn;
+    }
+    rethrow;                                        // ネットワークエラー → 再試行 UI
   }
-}
+});
 ```
 
 **操作**: 自動。認証状態をチェックして 1 秒以内に遷移。
@@ -84,15 +122,24 @@ class SplashController extends _$SplashController {
 **State**:
 
 ```dart
-@riverpod
-class SignInController extends _$SignInController {
+// google_sign_in で ID トークンを取得 → バックエンドで検証・upsert（#31）
+class SignInController extends AsyncNotifier<void> {
   @override
-  AsyncValue<void> build() => const AsyncValue.data(null);
+  Future<void> build() async {}
 
   Future<void> signInWithGoogle() async {
-    state = const AsyncValue.loading();
+    state = const AsyncLoading();
     state = await AsyncValue.guard(() async {
-      await supabase.auth.signInWithOAuth(OAuthProvider.google);
+      final account = await GoogleSignIn().signIn();
+      final idToken = (await account!.authentication).idToken!;
+
+      // ID トークンを検証し users を upsert（{user, is_new}）。
+      await ref.read(apiClientProvider)
+          .post('/api/auth/sign-in', data: {'id_token': idToken});
+
+      // 以降のリクエスト用に保存（Bearer に自動付与される）。
+      await ref.read(authStorageProvider).saveIdToken(idToken);
+      // → SplashScreen に戻り、is_new / displayName で Onboarding or Map へ
     });
   }
 }
@@ -151,7 +198,13 @@ class OnboardingController extends _$OnboardingController {
 
   Future<void> submit() async {
     if (!_validate()) return;
-    await supabase.from('users').insert({...});
+    // 表示名・アイコン・ハンドルを更新（リクエストは snake_case）。
+    // 409 user_id_taken はハンドル重複として表示する。
+    await ref.read(apiClientProvider).post('/api/me/profile', data: {
+      'display_name': state.displayName,
+      'icon': state.icon,
+      'user_id': state.userId,
+    });
     // → MapScreen へ
   }
 }
@@ -208,9 +261,12 @@ class MapController extends _$MapController {
   }
 
   Future<List<Pin>> _fetchVisiblePins() async {
-    final myId = supabase.auth.currentUser!.id;
-    // RPC 定義は model.md §3.1 を参照
-    return await supabase.rpc('get_visible_pins', params: {'me': myId});
+    // 自分 + 友達の Pin（発見ロジックは model.md §3 を参照）。
+    final res = await ref.read(apiClientProvider)
+        .get<Map<String, dynamic>>('/api/pins/visible');
+    return (res.data!['pins'] as List)
+        .map((j) => Pin.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   void selectPin(String pinId) { ... }
@@ -301,9 +357,10 @@ class PinComposeController extends _$PinComposeController {
     if (!_validate()) return false;
     state = state.copyWith(isSubmitting: true);
     try {
-      await supabase.from('pins').insert({
+      await ref.read(apiClientProvider).post('/api/pins', data: {
         'body': state.body,
-        'location': 'POINT(${state.location.lng} ${state.location.lat})',
+        'lat': state.location.latitude,
+        'lng': state.location.longitude,
       });
       return true;
     } catch (e) {
@@ -374,9 +431,9 @@ class PinComposeController extends _$PinComposeController {
 class PinDetailController extends _$PinDetailController {
   @override
   Future<PinDetailState> build(String pinId) async {
-    final pin = await _fetchPin(pinId);
-    final nearbyPins = await _fetchNearbyPins(pin.location, excludeId: pinId);
-    final reactions = await _fetchReactions(pinId);
+    final pin = await _fetchPin(pinId);                          // GET /api/pins/:id
+    final nearbyPins = await _fetchNearbyPins(pinId);            // GET /api/pins/:id/nearby
+    final reactions = await _fetchReactions(pinId);             // GET /api/pins/:id/reactions
     return PinDetailState(
       pin: pin,
       nearbyPins: nearbyPins,
@@ -388,19 +445,16 @@ class PinDetailController extends _$PinDetailController {
   Future<void> toggleReaction(String targetPinId) async {
     // 楽観的更新
     state = AsyncValue.data(state.value!.toggleReaction(targetPinId, _myId));
+    final dio = ref.read(apiClientProvider);
     try {
       if (_alreadyReacted(targetPinId)) {
-        await supabase.from('reactions')
-          .delete()
-          .match({'pin_id': targetPinId, 'user_id': _myId});
+        await dio.delete('/api/pins/$targetPinId/reactions/me');
       } else {
-        await supabase.from('reactions').insert({
-          'pin_id': targetPinId,
-          'user_id': _myId,
-          'kind': 'wakaru',
-        });
+        // 「わかる」のみ。kind はサーバ側で固定（リクエストボディ不要）。
+        await dio.post('/api/pins/$targetPinId/reactions');
       }
     } catch (e) {
+      // 失敗したら楽観的更新を取り消す（ロールバック）。
       state = AsyncValue.data(state.value!.toggleReaction(targetPinId, _myId));
       _showError();
     }
@@ -465,22 +519,15 @@ class PinDetailController extends _$PinDetailController {
 class NotificationsController extends _$NotificationsController {
   @override
   Future<List<NotificationItem>> build() async {
-    final items = await supabase
-      .from('notifications')
-      .select()
-      .order('created_at', ascending: false)
-      .limit(50);
+    final dio = ref.read(apiClientProvider);
+    final res = await dio.get<Map<String, dynamic>>(
+        '/api/notifications', queryParameters: {'limit': 50});
 
-    _markAllAsRead();
+    await dio.post('/api/notifications/read-all'); // 画面を開いた時点で既読化
 
-    return items.map(NotificationItem.fromJson).toList();
-  }
-
-  Future<void> _markAllAsRead() async {
-    await supabase
-      .from('notifications')
-      .update({'read_at': DateTime.now().toIso8601String()})
-      .filter('read_at', 'is', null);
+    return (res.data!['notifications'] as List)
+        .map((j) => NotificationItem.fromJson(j as Map<String, dynamic>))
+        .toList();
   }
 
   Future<void> acceptFriendRequest(String friendshipId) async { ... }
@@ -549,8 +596,8 @@ class FriendsController extends _$FriendsController {
   @override
   Future<FriendsState> build() async {
     return FriendsState(
-      pendingRequests: await _fetchPendingRequests(),
-      friends: await _fetchFriends(),
+      pendingRequests: await _fetchPendingRequests(), // GET /api/friends/requests/incoming
+      friends: await _fetchFriends(),                 // GET /api/friends
       searchQuery: '',
       searchResult: null,
     );
@@ -561,17 +608,23 @@ class FriendsController extends _$FriendsController {
       state = AsyncValue.data(state.value!.copyWith(searchResult: null));
       return;
     }
-    final user = await supabase
-      .from('users')
-      .select()
-      .eq('user_id', userId)
-      .maybeSingle();
-    state = AsyncValue.data(state.value!.copyWith(searchResult: user));
+    // 完全一致検索。見つからなければ 404。
+    final dio = ref.read(apiClientProvider);
+    try {
+      final res = await dio.get<Map<String, dynamic>>(
+          '/api/users/search', queryParameters: {'user_id': userId});
+      final user = User.fromJson((res.data!['user'] as Map).cast<String, dynamic>());
+      state = AsyncValue.data(state.value!.copyWith(searchResult: user));
+    } on DioException catch (e) {
+      if (e.response?.statusCode != 404) rethrow;
+      state = AsyncValue.data(state.value!.copyWith(searchResult: null));
+    }
   }
 
-  Future<void> sendRequest(String userId) async { ... }
-  Future<void> accept(String friendshipId) async { ... }
-  Future<void> reject(String friendshipId) async { ... }
+  // 検索結果の publicUser.id（UUID）を receiver_id として送る。
+  Future<void> sendRequest(String receiverId) async { ... } // POST /api/friends/requests {receiver_id}
+  Future<void> accept(String requestId) async { ... }       // POST /api/friends/requests/:id/accept
+  Future<void> reject(String requestId) async { ... }       // POST /api/friends/requests/:id/reject
   Future<void> shareInviteLink() async {
     final myUserId = await _getMyUserId();
     final url = 'https://layer.app/invite?from=$myUserId';
@@ -635,9 +688,9 @@ class FriendsController extends _$FriendsController {
 class ProfileController extends _$ProfileController {
   @override
   Future<ProfileState> build() async {
-    final user = await _fetchMyUser();
-    final pinCount = await _fetchMyPinCount();
-    final friendCount = await _fetchMyFriendCount();
+    final user = await _fetchMyUser();             // GET /api/me
+    final pinCount = await _fetchMyPinCount();     // 自分の Pin 総数
+    final friendCount = await _fetchMyFriendCount(); // GET /api/friends の件数
     return ProfileState(
       user: user,
       pinCount: pinCount,
@@ -646,7 +699,9 @@ class ProfileController extends _$ProfileController {
   }
 
   Future<void> signOut() async {
-    await supabase.auth.signOut();
+    await ref.read(apiClientProvider).post('/api/auth/sign-out');
+    await ref.read(authStorageProvider).clear(); // Bearer 用トークンを破棄
+    await GoogleSignIn().signOut();
   }
 }
 ```
@@ -694,7 +749,7 @@ class ProfileController extends _$ProfileController {
     ↓ FAB タップ
 [PinComposeScreen]
     ↓ 投稿
-[Supabase: pins INSERT]
+[POST /api/pins → pins INSERT]
     ↓
 [DB Trigger 発火]
     ↓
@@ -708,13 +763,14 @@ class ProfileController extends _$ProfileController {
     ↓
 [MapScreen に戻る]
     ↓
-[Realtime 更新で通知バッジが増える]
+[GET /api/notifications/unread-count をポーリング → 通知バッジ更新]
 ```
 
-> 通知バッジは Supabase Realtime の購読で起動中もライブ更新される。アプリ起動時のバナー（要件 FR-6.1）は、起動以降に蓄積した未読をまとめて見せる導線。
+> MVP では Realtime 購読は使わず、通知バッジは `GET /api/notifications/unread-count` のポーリング／画面復帰時の再取得で更新する。アプリ起動時のバナー（要件 FR-6.1）は、起動以降に蓄積した未読をまとめて見せる導線（#44）。
 
 ---
 
 ## 4. 変更履歴
 
 - 2026-05-19: 要件定義ドキュメント（require.md §9・§10）から分離して新規作成。発見対象を「友達限定」に修正（A1）、OnboardingScreen の「1/2」表記を削除（A3）、発見通知 ×2 の宛先を明記（A4）。
+- 2026-05-23: バックエンドを Supabase 前提から **Go REST API** に合わせて全面改訂。全画面の State スニペットを dio + Riverpod ベースへ書き換え、データ層・認証の前提（§1.1）と主要エンドポイント表を追加。JSON 規約（レスポンス camelCase / リクエスト snake_case）を明記。§3.2 の Realtime をポーリングへ修正。
