@@ -19,6 +19,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # .env は秘匿のため Git 管理外（.gitignore）。pubspec.yaml が .env を
+      # アセット宣言しているため、CI では .env.example から生成して
+      # `flutter analyze` の asset_does_not_exist を防ぐ。
+      - name: Create .env from example
+        run: cp .env.example .env
+
       - name: Set up Flutter
         uses: subosito/flutter-action@v2
         with:
