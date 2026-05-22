@@ -5,7 +5,8 @@ import 'package:layer/main.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
-  testWidgets('LayerApp は初期ルートで Splash を表示する', (WidgetTester tester) async {
+  testWidgets('LayerApp はトークン無しのとき SignIn へ振り分ける',
+      (WidgetTester tester) async {
     SharedPreferences.setMockInitialValues({});
     final prefs = await SharedPreferences.getInstance();
 
@@ -19,6 +20,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Splash'), findsOneWidget);
+    // SplashScreen → トークン無し → /signin（Placeholder）。
+    expect(find.text('SignIn'), findsOneWidget);
   });
 }

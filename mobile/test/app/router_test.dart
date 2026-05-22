@@ -2,10 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:layer/app/router.dart';
+import 'package:layer/core/auth/auth_storage.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
   testWidgets('各ルートに遷移して Placeholder を表示する', (tester) async {
-    final container = ProviderContainer();
+    SharedPreferences.setMockInitialValues({});
+    final prefs = await SharedPreferences.getInstance();
+    final storage = AuthStorage(prefs); // トークン無し
+
+    final container = ProviderContainer(
+      overrides: [authStorageProvider.overrideWithValue(storage)],
+    );
     addTearDown(container.dispose);
     final router = container.read(routerProvider);
 
@@ -17,11 +27,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 初期ルート '/' は Splash。
-    expect(find.text('Splash'), findsOneWidget);
-
-    router.go('/signin');
-    await tester.pumpAndSettle();
+    // 初期ルート '/' の SplashScreen はトークン無しのため /signin へ自動遷移する。
     expect(find.text('SignIn'), findsOneWidget);
 
     router.go('/map');

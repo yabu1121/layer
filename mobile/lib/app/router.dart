@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/splash/splash_screen.dart';
 import 'placeholder_screen.dart';
 
 /// アプリ全体のルーティング定義。
@@ -14,7 +15,7 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(
         path: '/',
-        builder: (context, state) => const PlaceholderScreen('Splash'),
+        builder: (context, state) => const SplashScreen(),
       ),
       GoRoute(
         path: '/signin',
