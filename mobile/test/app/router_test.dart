@@ -27,8 +27,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    // 初期ルート '/' の SplashScreen はトークン無しのため /signin へ自動遷移する。
-    expect(find.text('SignIn'), findsOneWidget);
+    // 初期ルート '/' の SplashScreen はトークン無しのため /signin（SignInScreen）へ自動遷移する。
+    expect(find.text('Google でサインイン'), findsOneWidget);
 
     router.go('/map');
     await tester.pumpAndSettle();

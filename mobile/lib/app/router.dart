@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/signin/signin_screen.dart';
 import '../features/splash/splash_screen.dart';
 import 'placeholder_screen.dart';
 
@@ -19,7 +20,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/signin',
-        builder: (context, state) => const PlaceholderScreen('SignIn'),
+        builder: (context, state) => const SignInScreen(),
       ),
       GoRoute(
         path: '/onboarding',
