@@ -4,19 +4,25 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:layer/core/auth/current_user.dart';
 import 'package:layer/core/models/pin.dart';
 import 'package:layer/core/models/user.dart';
+import 'package:layer/core/share/share_service.dart';
 import 'package:layer/features/friends/friend_repository.dart';
 import 'package:layer/features/friends/friends_screen.dart';
 
 class _FakeFriendRepo implements FriendRepository {
-  _FakeFriendRepo({this.found, this.incoming = const []});
+  _FakeFriendRepo({
+    this.found,
+    this.incoming = const [],
+    this.friends = const [],
+  });
   final PinAuthor? found;
   final List<IncomingRequest> incoming;
+  final List<PinAuthor> friends;
   SendRequestResult result = SendRequestResult.sent;
 
   @override
   Future<PinAuthor?> searchUser(String userId) async => found;
   @override
-  Future<List<PinAuthor>> listFriends() async => const [];
+  Future<List<PinAuthor>> listFriends() async => friends;
   @override
   Future<SendRequestResult> sendRequest(String receiverId) async => result;
   @override
@@ -27,11 +33,24 @@ class _FakeFriendRepo implements FriendRepository {
   Future<void> reject(String requestId) async {}
 }
 
-Widget _app({PinAuthor? found, List<IncomingRequest> incoming = const []}) =>
+class _FakeShare implements ShareService {
+  String? shared;
+  @override
+  Future<void> share(String text) async => shared = text;
+}
+
+Widget _app({
+  PinAuthor? found,
+  List<IncomingRequest> incoming = const [],
+  List<PinAuthor> friends = const [],
+  ShareService? share,
+}) =>
     ProviderScope(
       overrides: [
-        friendRepositoryProvider
-            .overrideWithValue(_FakeFriendRepo(found: found, incoming: incoming)),
+        friendRepositoryProvider.overrideWithValue(
+          _FakeFriendRepo(found: found, incoming: incoming, friends: friends),
+        ),
+        shareServiceProvider.overrideWithValue(share ?? _FakeShare()),
         currentUserProvider.overrideWith(
           (ref) async => const User(
             id: 'me',
@@ -86,5 +105,31 @@ void main() {
     await tester.tap(find.text('承認'));
     await tester.pumpAndSettle();
     expect(find.text('申請中（1）'), findsNothing); // セクション消える
+  });
+
+  testWidgets('友達一覧を表示する', (tester) async {
+    const friend =
+        PinAuthor(id: 'f1', userId: 'ken', displayName: 'ケン', icon: '🍀');
+    await tester.pumpWidget(_app(friends: const [friend]));
+    await tester.pumpAndSettle();
+
+    expect(find.text('友達（1）'), findsOneWidget);
+    expect(find.text('ケン'), findsOneWidget);
+  });
+
+  testWidgets('友達 0 件で招待を促す', (tester) async {
+    await tester.pumpWidget(_app());
+    await tester.pumpAndSettle();
+    expect(find.text('友達を招待して、Layer をはじめましょう'), findsOneWidget);
+  });
+
+  testWidgets('招待ボタンで共有テキストを渡す', (tester) async {
+    final share = _FakeShare();
+    await tester.pumpWidget(_app(share: share));
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.text('友達を招待'));
+    await tester.pumpAndSettle();
+    expect(share.shared, 'Layer で繋がろう！ @me を友達追加してね');
   });
 }

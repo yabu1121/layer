@@ -185,6 +185,12 @@ void main() {
     expect(s.incoming.first.id, 'r2');
   });
 
+  test('inviteMessage: 自分の user_id を含む', () async {
+    final c = _container(_FakeFriendRepo());
+    final msg = await c.read(friendsControllerProvider.notifier).inviteMessage();
+    expect(msg, 'Layer で繋がろう！ @me を友達追加してね');
+  });
+
   test('検索しても incoming/friends は保持される', () async {
     final repo = _FakeFriendRepo(
       incoming: [_req('r1', 'a')],

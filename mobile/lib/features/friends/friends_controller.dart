@@ -156,6 +156,16 @@ class FriendsController extends Notifier<FriendsState> {
     }
   }
 
+  /// 招待用の共有テキストを生成する（自分の user_id を含む）。取得失敗で null。
+  Future<String?> inviteMessage() async {
+    try {
+      final me = await ref.read(currentUserProvider.future);
+      return 'Layer で繋がろう！ @${me.userId} を友達追加してね';
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// 申請を拒否する。楽観的に incoming から外し、失敗で巻き戻す。
   Future<bool> reject(IncomingRequest request) async {
     final prevIncoming = state.incoming;
