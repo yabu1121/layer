@@ -2,8 +2,19 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:layer/core/auth/current_user.dart';
 import 'package:layer/core/location/location_service.dart';
+import 'package:layer/core/models/pin.dart';
+import 'package:layer/core/models/user.dart';
 import 'package:layer/features/map/map_screen.dart';
+import 'package:layer/features/map/pin_repository.dart';
+
+class _FakePinRepository implements PinRepository {
+  _FakePinRepository(this.pins);
+  final List<Pin> pins;
+  @override
+  Future<List<Pin>> fetchVisible() async => pins;
+}
 
 class _FakeLocationService implements LocationService {
   _FakeLocationService({
@@ -31,7 +42,18 @@ class _FakeLocationService implements LocationService {
 }
 
 Widget _app(_FakeLocationService loc) => ProviderScope(
-      overrides: [locationServiceProvider.overrideWithValue(loc)],
+      overrides: [
+        locationServiceProvider.overrideWithValue(loc),
+        pinRepositoryProvider.overrideWithValue(_FakePinRepository(const [])),
+        currentUserProvider.overrideWith(
+          (ref) async => const User(
+            id: 'me',
+            userId: 'me',
+            displayName: 'Me',
+            icon: '😀',
+          ),
+        ),
+      ],
       child: const MaterialApp(home: MapScreen()),
     );
 

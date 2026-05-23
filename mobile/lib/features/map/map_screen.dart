@@ -2,13 +2,15 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/location/location_service.dart';
 import 'map_controller.dart';
+import 'map_markers.dart';
 
-/// アプリ中心の地図画面（screens.md §2.4 / issue #33）。
-/// 本 issue では地図表示と現在地センタリングのみ。Pin 描画は別 issue。
+/// アプリ中心の地図画面（screens.md §2.4 / issue #33・#34）。
+/// 現在地センタリングと可視 Pin マーカー描画を行う。クラスタは別 issue。
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
@@ -19,6 +21,9 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   final _mapController = Completer<GoogleMapController>();
 
+  /// 絵文字マーカーの生成は非同期（PNG 描画）のため、結果を保持して描画する。
+  Set<Marker> _markers = {};
+
   @override
   void initState() {
     super.initState();
@@ -26,6 +31,15 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(mapControllerProvider.notifier).load();
     });
+  }
+
+  Future<void> _rebuildMarkers(MapState state) async {
+    final markers = await buildPinMarkers(
+      pins: state.pins,
+      myUserId: state.myUserId ?? '',
+      onTap: (pinId) => context.push('/pin/$pinId'),
+    );
+    if (mounted) setState(() => _markers = markers);
   }
 
   Future<void> _onRecenter() async {
@@ -40,6 +54,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Pin / 自分判定が変わったらマーカーを作り直す。
+    ref.listen<MapState>(mapControllerProvider, (prev, next) {
+      if (prev?.pins != next.pins || prev?.myUserId != next.myUserId) {
+        _rebuildMarkers(next);
+      }
+    });
     final state = ref.watch(mapControllerProvider);
 
     return Scaffold(
@@ -67,6 +87,7 @@ class _MapScreenState extends ConsumerState<MapScreen> {
           ),
         MapStatus.ready => _MapView(
             center: state.center!,
+            markers: _markers,
             onMapCreated: (c) {
               if (!_mapController.isCompleted) _mapController.complete(c);
             },
@@ -80,11 +101,13 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 class _MapView extends StatelessWidget {
   const _MapView({
     required this.center,
+    required this.markers,
     required this.onMapCreated,
     required this.onRecenter,
   });
 
   final LatLngPoint center;
+  final Set<Marker> markers;
   final void Function(GoogleMapController) onMapCreated;
   final VoidCallback onRecenter;
 
@@ -97,6 +120,7 @@ class _MapView extends StatelessWidget {
             target: LatLng(center.lat, center.lng),
             zoom: 15,
           ),
+          markers: markers,
           myLocationEnabled: true,
           myLocationButtonEnabled: false, // 自前の現在地ボタンを使う
           onMapCreated: onMapCreated,
