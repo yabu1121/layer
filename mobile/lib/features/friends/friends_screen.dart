@@ -2,29 +2,58 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/pin.dart';
+import 'friend_repository.dart';
 import 'friends_controller.dart';
 
-/// 友達の検索・申請画面（screens.md §2.8 上部 / issue #40）。
-/// 申請の承認・一覧・招待は別 issue（#41/#42）。
-class FriendsScreen extends ConsumerWidget {
+/// 友達の検索・申請・受信申請の承認/拒否（screens.md §2.8 / issue #40・#41）。
+/// 友達一覧表示・招待共有は #42。
+class FriendsScreen extends ConsumerStatefulWidget {
   const FriendsScreen({super.key});
 
-  Future<void> _send(BuildContext context, WidgetRef ref) async {
+  @override
+  ConsumerState<FriendsScreen> createState() => _FriendsScreenState();
+}
+
+class _FriendsScreenState extends ConsumerState<FriendsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(friendsControllerProvider.notifier).loadLists();
+    });
+  }
+
+  void _snack(String message) {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  Future<void> _send() async {
     final ok = await ref.read(friendsControllerProvider.notifier).sendRequest();
-    if (!ok && context.mounted) {
-      ScaffoldMessenger.of(context)
-        ..hideCurrentSnackBar()
-        ..showSnackBar(const SnackBar(content: Text('申請を送れませんでした')));
+    if (!ok && mounted) _snack('申請を送れませんでした');
+  }
+
+  Future<void> _accept(IncomingRequest req) async {
+    final ok = await ref.read(friendsControllerProvider.notifier).accept(req);
+    if (mounted) {
+      _snack(ok ? '${req.requester.displayName} と友達になりました' : '承認に失敗しました');
     }
   }
 
+  Future<void> _reject(IncomingRequest req) async {
+    final ok = await ref.read(friendsControllerProvider.notifier).reject(req);
+    if (!ok && mounted) _snack('拒否に失敗しました');
+  }
+
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final state = ref.watch(friendsControllerProvider);
+    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(title: const Text('友達')),
-      body: Column(
+      body: ListView(
         children: [
           Padding(
             padding: const EdgeInsets.all(16),
@@ -39,7 +68,20 @@ class FriendsScreen extends ConsumerWidget {
                   ref.read(friendsControllerProvider.notifier).onQueryChanged,
             ),
           ),
-          Expanded(child: _SearchResult(state: state, onSend: () => _send(context, ref))),
+          _SearchResult(state: state, onSend: _send),
+          if (state.incoming.isNotEmpty) ...[
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+              child: Text('申請中（${state.incoming.length}）',
+                  style: theme.textTheme.titleSmall),
+            ),
+            for (final req in state.incoming)
+              _IncomingTile(
+                request: req,
+                onAccept: () => _accept(req),
+                onReject: () => _reject(req),
+              ),
+          ],
         ],
       ),
     );
@@ -58,9 +100,15 @@ class _SearchResult extends StatelessWidget {
       case FriendSearchStatus.idle:
         return const SizedBox.shrink();
       case FriendSearchStatus.loading:
-        return const Center(child: CircularProgressIndicator());
+        return const Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: CircularProgressIndicator()),
+        );
       case FriendSearchStatus.notFound:
-        return const Center(child: Text('ユーザーが見つかりませんでした'));
+        return const Padding(
+          padding: EdgeInsets.all(24),
+          child: Center(child: Text('ユーザーが見つかりませんでした')),
+        );
       case FriendSearchStatus.found:
         return _UserCard(
           user: state.foundUser!,
@@ -118,5 +166,35 @@ class _UserCard extends StatelessWidget {
               : const Text('友達申請'),
         );
     }
+  }
+}
+
+class _IncomingTile extends StatelessWidget {
+  const _IncomingTile({
+    required this.request,
+    required this.onAccept,
+    required this.onReject,
+  });
+
+  final IncomingRequest request;
+  final VoidCallback onAccept;
+  final VoidCallback onReject;
+
+  @override
+  Widget build(BuildContext context) {
+    final u = request.requester;
+    return ListTile(
+      leading: Text(u.icon, style: const TextStyle(fontSize: 24)),
+      title: Text(u.displayName),
+      subtitle: Text('@${u.userId}'),
+      trailing: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FilledButton(onPressed: onAccept, child: const Text('承認')),
+          const SizedBox(width: 8),
+          OutlinedButton(onPressed: onReject, child: const Text('拒否')),
+        ],
+      ),
+    );
   }
 }

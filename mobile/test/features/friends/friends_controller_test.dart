@@ -14,12 +14,17 @@ class _FakeFriendRepo implements FriendRepository {
     this.found,
     this.friends = const [],
     this.sendResult = SendRequestResult.sent,
+    this.incoming = const [],
   });
 
   PinAuthor? found;
   List<PinAuthor> friends;
   SendRequestResult sendResult;
+  List<IncomingRequest> incoming;
   String? sentTo;
+  String? acceptedId;
+  String? rejectedId;
+  bool throwAccept = false;
 
   @override
   Future<PinAuthor?> searchUser(String userId) async => found;
@@ -32,7 +37,24 @@ class _FakeFriendRepo implements FriendRepository {
     sentTo = receiverId;
     return sendResult;
   }
+
+  @override
+  Future<List<IncomingRequest>> listIncoming() async => incoming;
+
+  @override
+  Future<void> accept(String requestId) async {
+    if (throwAccept) throw Exception('boom');
+    acceptedId = requestId;
+  }
+
+  @override
+  Future<void> reject(String requestId) async {
+    rejectedId = requestId;
+  }
 }
+
+IncomingRequest _req(String id, String userId) =>
+    IncomingRequest(id: id, requester: _user(userId));
 
 const _me = User(id: 'me-id', userId: 'me', displayName: 'Me', icon: '😀');
 
@@ -111,5 +133,70 @@ void main() {
     final n = c.read(friendsControllerProvider.notifier);
     await n.search('hother');
     expect(await n.sendRequest(), isFalse);
+  });
+
+  test('loadLists: 受信申請と友達一覧を読み込む', () async {
+    final repo = _FakeFriendRepo(
+      incoming: [_req('r1', 'a'), _req('r2', 'b')],
+      friends: [_user('f1')],
+    );
+    final c = _container(repo);
+    await c.read(friendsControllerProvider.notifier).loadLists();
+    final s = c.read(friendsControllerProvider);
+    expect(s.incoming.length, 2);
+    expect(s.friends.length, 1);
+  });
+
+  test('accept: incoming から外して friends に移す', () async {
+    final repo = _FakeFriendRepo(incoming: [_req('r1', 'a')]);
+    final c = _container(repo);
+    final n = c.read(friendsControllerProvider.notifier);
+    await n.loadLists();
+
+    final ok = await n.accept(_req('r1', 'a'));
+    expect(ok, isTrue);
+    expect(repo.acceptedId, 'r1');
+    final s = c.read(friendsControllerProvider);
+    expect(s.incoming, isEmpty);
+    expect(s.friends.any((f) => f.id == 'a'), isTrue);
+  });
+
+  test('accept 失敗: ロールバック', () async {
+    final repo = _FakeFriendRepo(incoming: [_req('r1', 'a')])..throwAccept = true;
+    final c = _container(repo);
+    final n = c.read(friendsControllerProvider.notifier);
+    await n.loadLists();
+
+    final ok = await n.accept(_req('r1', 'a'));
+    expect(ok, isFalse);
+    expect(c.read(friendsControllerProvider).incoming.length, 1); // 戻る
+  });
+
+  test('reject: incoming から外す', () async {
+    final repo = _FakeFriendRepo(incoming: [_req('r1', 'a'), _req('r2', 'b')]);
+    final c = _container(repo);
+    final n = c.read(friendsControllerProvider.notifier);
+    await n.loadLists();
+
+    await n.reject(_req('r1', 'a'));
+    expect(repo.rejectedId, 'r1');
+    final s = c.read(friendsControllerProvider);
+    expect(s.incoming.length, 1);
+    expect(s.incoming.first.id, 'r2');
+  });
+
+  test('検索しても incoming/friends は保持される', () async {
+    final repo = _FakeFriendRepo(
+      incoming: [_req('r1', 'a')],
+      friends: [_user('f1')],
+      found: _user('other'),
+    );
+    final c = _container(repo);
+    final n = c.read(friendsControllerProvider.notifier);
+    await n.loadLists();
+    await n.search('hother');
+    final s = c.read(friendsControllerProvider);
+    expect(s.searchStatus, FriendSearchStatus.found);
+    expect(s.incoming.length, 1); // 検索で消えない
   });
 }
