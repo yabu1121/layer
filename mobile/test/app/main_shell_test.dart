@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:layer/app/router.dart';
 import 'package:layer/core/auth/current_user.dart';
+import 'package:layer/core/location/geocoding_service.dart';
 import 'package:layer/core/location/location_service.dart';
 import 'package:layer/core/models/pin.dart';
 import 'package:layer/core/models/user.dart';
@@ -27,6 +28,13 @@ class _GrantedLocation implements LocationService {
 class _EmptyPins implements PinRepository {
   @override
   Future<List<Pin>> fetchVisible() async => const [];
+  @override
+  Future<Pin> create({
+    required String body,
+    required double lat,
+    required double lng,
+  }) async =>
+      throw UnimplementedError();
 }
 
 class _ZeroBadge implements NotificationRepository {
@@ -34,9 +42,15 @@ class _ZeroBadge implements NotificationRepository {
   Future<int> fetchUnreadCount() async => 0;
 }
 
+class _StubGeocoding implements GeocodingService {
+  @override
+  Future<String?> reverseGeocode(double lat, double lng) async => '東京都';
+}
+
 ProviderContainer _container() => ProviderContainer(
       overrides: [
         locationServiceProvider.overrideWithValue(_GrantedLocation()),
+        geocodingServiceProvider.overrideWithValue(_StubGeocoding()),
         pinRepositoryProvider.overrideWithValue(_EmptyPins()),
         notificationRepositoryProvider.overrideWithValue(_ZeroBadge()),
         currentUserProvider.overrideWith(
@@ -95,6 +109,6 @@ void main() {
 
     await tester.tap(find.byTooltip('Pin を立てる'));
     await tester.pumpAndSettle();
-    expect(find.text('PinCompose'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Pin を立てる'), findsOneWidget);
   });
 }

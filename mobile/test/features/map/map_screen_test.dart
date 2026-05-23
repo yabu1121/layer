@@ -15,6 +15,13 @@ class _FakePinRepository implements PinRepository {
   final List<Pin> pins;
   @override
   Future<List<Pin>> fetchVisible() async => pins;
+  @override
+  Future<Pin> create({
+    required String body,
+    required double lat,
+    required double lng,
+  }) async =>
+      throw UnimplementedError();
 }
 
 class _FakeNotificationRepository implements NotificationRepository {
