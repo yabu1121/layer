@@ -6,11 +6,12 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/location/location_service.dart';
+import '../notifications/notification_badge_controller.dart';
 import 'map_controller.dart';
 import 'map_markers.dart';
 
-/// アプリ中心の地図画面（screens.md §2.4 / issue #33・#34）。
-/// 現在地センタリングと可視 Pin マーカー描画を行う。クラスタは別 issue。
+/// アプリ中心の地図画面（screens.md §2.4 / issue #33・#34・#35）。
+/// 現在地センタリング・可視 Pin マーカー・クラスタリング・通知バッジを担う。
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
@@ -21,25 +22,51 @@ class MapScreen extends ConsumerStatefulWidget {
 class _MapScreenState extends ConsumerState<MapScreen> {
   final _mapController = Completer<GoogleMapController>();
 
-  /// 絵文字マーカーの生成は非同期（PNG 描画）のため、結果を保持して描画する。
+  /// google_maps_flutter 標準クラスタリングのグループ ID。
+  static const _clusterManagerId = ClusterManagerId('pins');
+
+  /// 絵文字マーカー生成は非同期（PNG 描画）のため結果を保持して描画する。
   Set<Marker> _markers = {};
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
-    // build 後に位置情報の取得を開始する。
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(mapControllerProvider.notifier).load();
+      _refreshBadge();
     });
+    // 未読数を 30 秒ごとにポーリングする。
+    _pollTimer =
+        Timer.periodic(const Duration(seconds: 30), (_) => _refreshBadge());
   }
+
+  @override
+  void dispose() {
+    _pollTimer?.cancel();
+    super.dispose();
+  }
+
+  void _refreshBadge() =>
+      ref.read(notificationBadgeProvider.notifier).refresh();
 
   Future<void> _rebuildMarkers(MapState state) async {
     final markers = await buildPinMarkers(
       pins: state.pins,
       myUserId: state.myUserId ?? '',
+      clusterManagerId: _clusterManagerId,
       onTap: (pinId) => context.push('/pin/$pinId'),
     );
     if (mounted) setState(() => _markers = markers);
+  }
+
+  /// クラスタタップ: そのクラスタの範囲にズームインする。
+  Future<void> _onClusterTap(Cluster cluster) async {
+    if (!_mapController.isCompleted) return;
+    final controller = await _mapController.future;
+    await controller.animateCamera(
+      CameraUpdate.newLatLngBounds(cluster.bounds, 60),
+    );
   }
 
   Future<void> _onRecenter() async {
@@ -63,7 +90,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
     final state = ref.watch(mapControllerProvider);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Layer')),
+      appBar: AppBar(
+        title: const Text('Layer'),
+        actions: const [_NotificationBadgeButton()],
+      ),
       body: switch (state.status) {
         MapStatus.loading => const Center(child: CircularProgressIndicator()),
         MapStatus.serviceDisabled => _LocationGuide(
@@ -88,8 +118,12 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         MapStatus.ready => _MapView(
             center: state.center!,
             markers: _markers,
-            onMapCreated: (c) {
-              if (!_mapController.isCompleted) _mapController.complete(c);
+            clusterManagerId: _clusterManagerId,
+            onClusterTap: _onClusterTap,
+            onMapCreated: (controller) {
+              if (!_mapController.isCompleted) {
+                _mapController.complete(controller);
+              }
             },
             onRecenter: _onRecenter,
           ),
@@ -98,16 +132,43 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   }
 }
 
+class _NotificationBadgeButton extends ConsumerWidget {
+  const _NotificationBadgeButton();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final count = ref.watch(notificationBadgeProvider);
+    return IconButton(
+      tooltip: 'お知らせ',
+      onPressed: () async {
+        await context.push('/notifications');
+        // 通知画面で既読化された可能性があるので戻ったら再取得する。
+        ref.read(notificationBadgeProvider.notifier).refresh();
+      },
+      icon: count > 0
+          ? Badge(
+              label: Text('$count'),
+              child: const Icon(Icons.notifications),
+            )
+          : const Icon(Icons.notifications_none),
+    );
+  }
+}
+
 class _MapView extends StatelessWidget {
   const _MapView({
     required this.center,
     required this.markers,
+    required this.clusterManagerId,
+    required this.onClusterTap,
     required this.onMapCreated,
     required this.onRecenter,
   });
 
   final LatLngPoint center;
   final Set<Marker> markers;
+  final ClusterManagerId clusterManagerId;
+  final void Function(Cluster) onClusterTap;
   final void Function(GoogleMapController) onMapCreated;
   final VoidCallback onRecenter;
 
@@ -121,6 +182,12 @@ class _MapView extends StatelessWidget {
             zoom: 15,
           ),
           markers: markers,
+          clusterManagers: {
+            ClusterManager(
+              clusterManagerId: clusterManagerId,
+              onClusterTap: onClusterTap,
+            ),
+          },
           myLocationEnabled: true,
           myLocationButtonEnabled: false, // 自前の現在地ボタンを使う
           onMapCreated: onMapCreated,

@@ -18,15 +18,14 @@ Pin _pin(String id, String ownerId) => Pin(
       ),
     );
 
+const _clusterId = ClusterManagerId('pins');
+
 void main() {
   test('markerColorFor: 自分と友達で色が異なる', () {
-    expect(
-      markerColorFor(mine: true),
-      isNot(markerColorFor(mine: false)),
-    );
+    expect(markerColorFor(mine: true), isNot(markerColorFor(mine: false)));
   });
 
-  testWidgets('buildPinMarkers: 件数・位置・onTap', (tester) async {
+  testWidgets('buildPinMarkers: 件数・clusterManagerId・onTap', (tester) async {
     String? tapped;
     late Set<Marker> markers;
     // toImage は実 async のため runAsync 内で実行する。
@@ -34,6 +33,7 @@ void main() {
       markers = await buildPinMarkers(
         pins: [_pin('p1', 'me-id'), _pin('p2', 'friend-id')],
         myUserId: 'me-id',
+        clusterManagerId: _clusterId,
         onTap: (id) => tapped = id,
       );
     });
@@ -41,6 +41,7 @@ void main() {
     expect(markers.length, 2);
     final m = markers.firstWhere((x) => x.markerId.value == 'p1');
     expect(m.position, const LatLng(35.0, 139.0));
+    expect(m.clusterManagerId, _clusterId);
     m.onTap!();
     expect(tapped, 'p1');
   });
@@ -51,6 +52,7 @@ void main() {
       markers = await buildPinMarkers(
         pins: const [],
         myUserId: 'me-id',
+        clusterManagerId: _clusterId,
         onTap: (_) {},
       );
     });

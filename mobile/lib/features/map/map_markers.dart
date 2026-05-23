@@ -47,26 +47,28 @@ Future<BitmapDescriptor> renderPinMarkerIcon({
 
 /// 可視 Pin からマーカー集合を作る（screens.md §2.4 表示ロジック）。
 ///
+/// 各マーカーに [clusterManagerId] を付けることで google_maps_flutter 標準の
+/// クラスタリング（同一地点付近のまとまり）に乗せる。
 /// - 自分の Pin: 青系リング + 自分のアイコン
 /// - 友達の Pin: オレンジ系リング + 投稿者のアイコン
-/// - infoWindow に投稿者アイコン + 表示名 + 本文
 /// - タップで [onTap]（PinDetail を開く導線。遷移実装は別 issue）
 Future<Set<Marker>> buildPinMarkers({
   required List<Pin> pins,
   required String myUserId,
+  required ClusterManagerId clusterManagerId,
   required void Function(String pinId) onTap,
 }) async {
   final markers = <Marker>{};
   for (final pin in pins) {
-    final mine = pin.isMine(myUserId);
     final icon = await renderPinMarkerIcon(
       emoji: pin.author.icon,
-      ringColor: markerColorFor(mine: mine),
+      ringColor: markerColorFor(mine: pin.isMine(myUserId)),
     );
     markers.add(
       Marker(
         markerId: MarkerId(pin.id),
         position: LatLng(pin.lat, pin.lng),
+        clusterManagerId: clusterManagerId,
         icon: icon,
         infoWindow: InfoWindow(
           title: '${pin.author.icon} ${pin.author.displayName}',
