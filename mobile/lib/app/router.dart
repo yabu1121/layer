@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../features/map/map_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/pin_compose/pin_compose_screen.dart';
+import '../features/pin_detail/pin_detail_screen.dart';
 import '../features/signin/signin_screen.dart';
 import '../features/splash/splash_screen.dart';
 import 'main_shell.dart';
@@ -38,7 +39,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/pin/:id',
         builder: (context, state) =>
-            PlaceholderScreen('PinDetail ${state.pathParameters['id']}'),
+            PinDetailScreen(pinId: state.pathParameters['id']!),
       ),
       // ボトムタブ（地図 / 通知 / 自分）。
       StatefulShellRoute.indexedStack(

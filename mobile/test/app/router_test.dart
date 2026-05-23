@@ -5,6 +5,8 @@ import 'package:layer/app/router.dart';
 import 'package:layer/core/auth/auth_storage.dart';
 import 'package:layer/core/location/geocoding_service.dart';
 import 'package:layer/core/location/location_service.dart';
+import 'package:layer/core/models/pin.dart';
+import 'package:layer/features/map/pin_repository.dart';
 import 'package:layer/features/notifications/notification_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -34,6 +36,30 @@ class _StubGeocoding implements GeocodingService {
   Future<String?> reverseGeocode(double lat, double lng) async => '東京都';
 }
 
+class _StubPinRepository implements PinRepository {
+  @override
+  Future<Pin> getById(String id) async => Pin(
+        id: id,
+        ownerId: 'o',
+        body: 'b',
+        lat: 0,
+        lng: 0,
+        createdAt: DateTime(2026),
+        author: const PinAuthor(id: 'o', userId: 'h', displayName: 'n', icon: '🐱'),
+      );
+  @override
+  Future<List<Pin>> getNearby(String id) async => const [];
+  @override
+  Future<List<Pin>> fetchVisible() async => const [];
+  @override
+  Future<Pin> create({
+    required String body,
+    required double lat,
+    required double lng,
+  }) async =>
+      throw UnimplementedError();
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -49,6 +75,7 @@ void main() {
         notificationRepositoryProvider
             .overrideWithValue(_StubNotificationRepository()),
         geocodingServiceProvider.overrideWithValue(_StubGeocoding()),
+        pinRepositoryProvider.overrideWithValue(_StubPinRepository()),
       ],
     );
     addTearDown(container.dispose);
@@ -75,9 +102,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.widgetWithText(AppBar, 'Pin を立てる'), findsOneWidget);
 
-    // 動的パラメータ付きルート。
+    // 動的パラメータ付きルート（PinDetailScreen、近傍 0 件）。
     router.go('/pin/abc123');
     await tester.pumpAndSettle();
-    expect(find.text('PinDetail abc123'), findsOneWidget);
+    expect(find.text('ここではまだあなただけです'), findsOneWidget);
   });
 }
