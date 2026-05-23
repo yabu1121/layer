@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/map/map_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/signin/signin_screen.dart';
 import '../features/splash/splash_screen.dart';
@@ -29,7 +30,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
       GoRoute(
         path: '/map',
-        builder: (context, state) => const PlaceholderScreen('Map'),
+        builder: (context, state) => const MapScreen(),
       ),
       GoRoute(
         path: '/friends',

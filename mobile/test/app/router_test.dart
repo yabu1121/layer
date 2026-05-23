@@ -3,7 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:layer/app/router.dart';
 import 'package:layer/core/auth/auth_storage.dart';
+import 'package:layer/core/location/location_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+
+/// /map（MapScreen）が実機の Geolocator を呼ばないようにするスタブ。
+/// サービス OFF を返し、決まった案内文を出させる。
+class _StubLocationService implements LocationService {
+  @override
+  Future<bool> isServiceEnabled() async => false;
+  @override
+  Future<LocationPermissionStatus> ensurePermission() async =>
+      LocationPermissionStatus.denied;
+  @override
+  Future<LatLngPoint> currentPosition() async => const LatLngPoint(0, 0);
+  @override
+  Future<bool> openAppSettings() async => true;
+  @override
+  Future<bool> openLocationSettings() async => true;
+}
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
@@ -14,7 +31,10 @@ void main() {
     final storage = AuthStorage(prefs); // トークン無し
 
     final container = ProviderContainer(
-      overrides: [authStorageProvider.overrideWithValue(storage)],
+      overrides: [
+        authStorageProvider.overrideWithValue(storage),
+        locationServiceProvider.overrideWithValue(_StubLocationService()),
+      ],
     );
     addTearDown(container.dispose);
     final router = container.read(routerProvider);
@@ -30,9 +50,10 @@ void main() {
     // 初期ルート '/' の SplashScreen はトークン無しのため /signin（SignInScreen）へ自動遷移する。
     expect(find.text('Google でサインイン'), findsOneWidget);
 
+    // /map は MapScreen。スタブはサービス OFF を返すため案内文が出る。
     router.go('/map');
     await tester.pumpAndSettle();
-    expect(find.text('Map'), findsOneWidget);
+    expect(find.text('位置情報サービスがオフです'), findsOneWidget);
 
     // 静的ルート /pin/compose が /pin/:id より優先される。
     router.go('/pin/compose');
