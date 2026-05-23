@@ -94,6 +94,14 @@ class _MapScreenState extends ConsumerState<MapScreen> {
         title: const Text('Layer'),
         actions: const [_NotificationBadgeButton()],
       ),
+      floatingActionButton: state.status == MapStatus.ready
+          ? FloatingActionButton(
+              heroTag: 'compose',
+              tooltip: 'Pin を立てる',
+              onPressed: () => context.push('/pin/compose'),
+              child: const Icon(Icons.add),
+            )
+          : null,
       body: switch (state.status) {
         MapStatus.loading => const Center(child: CircularProgressIndicator()),
         MapStatus.serviceDisabled => _LocationGuide(
@@ -140,11 +148,8 @@ class _NotificationBadgeButton extends ConsumerWidget {
     final count = ref.watch(notificationBadgeProvider);
     return IconButton(
       tooltip: 'お知らせ',
-      onPressed: () async {
-        await context.push('/notifications');
-        // 通知画面で既読化された可能性があるので戻ったら再取得する。
-        ref.read(notificationBadgeProvider.notifier).refresh();
-      },
+      // 通知タブへ切り替える。既読反映は 30 秒ポーリングが拾う。
+      onPressed: () => context.go('/notifications'),
       icon: count > 0
           ? Badge(
               label: Text('$count'),
@@ -194,7 +199,7 @@ class _MapView extends StatelessWidget {
         ),
         Positioned(
           right: 16,
-          bottom: 16,
+          bottom: 88, // 投稿 FAB の上に重ならないよう配置
           child: FloatingActionButton.small(
             heroTag: 'recenter',
             onPressed: onRecenter,
