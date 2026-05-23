@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/pin.dart';
+import '../../core/share/share_service.dart';
 import 'friend_repository.dart';
 import 'friends_controller.dart';
 
@@ -46,6 +47,16 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
     if (!ok && mounted) _snack('拒否に失敗しました');
   }
 
+  Future<void> _invite() async {
+    final message =
+        await ref.read(friendsControllerProvider.notifier).inviteMessage();
+    if (message == null) {
+      if (mounted) _snack('招待リンクを作成できませんでした');
+      return;
+    }
+    await ref.read(shareServiceProvider).share(message);
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(friendsControllerProvider);
@@ -82,6 +93,31 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                 onReject: () => _reject(req),
               ),
           ],
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 16, 16, 4),
+            child: Text('友達（${state.friends.length}）',
+                style: theme.textTheme.titleSmall),
+          ),
+          if (state.friends.isEmpty)
+            const Padding(
+              padding: EdgeInsets.all(24),
+              child: Center(child: Text('友達を招待して、Layer をはじめましょう')),
+            )
+          else
+            for (final f in state.friends)
+              ListTile(
+                leading: Text(f.icon, style: const TextStyle(fontSize: 24)),
+                title: Text(f.displayName),
+                subtitle: Text('@${f.userId}'),
+              ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: OutlinedButton.icon(
+              onPressed: _invite,
+              icon: const Icon(Icons.share),
+              label: const Text('友達を招待'),
+            ),
+          ),
         ],
       ),
     );
