@@ -6,12 +6,14 @@ import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
 import '../../core/location/location_service.dart';
+import '../notifications/app_notification.dart';
 import '../notifications/notification_badge_controller.dart';
+import '../notifications/notification_banner_controller.dart';
 import 'map_controller.dart';
 import 'map_markers.dart';
 
-/// アプリ中心の地図画面（screens.md §2.4 / issue #33・#34・#35）。
-/// 現在地センタリング・可視 Pin マーカー・クラスタリング・通知バッジを担う。
+/// アプリ中心の地図画面（screens.md §2.4 / issue #33〜#35・#44）。
+/// 現在地センタリング・可視 Pin マーカー・クラスタリング・通知バッジ/バナーを担う。
 class MapScreen extends ConsumerStatefulWidget {
   const MapScreen({super.key});
 
@@ -19,7 +21,8 @@ class MapScreen extends ConsumerStatefulWidget {
   ConsumerState<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends ConsumerState<MapScreen> {
+class _MapScreenState extends ConsumerState<MapScreen>
+    with WidgetsBindingObserver {
   final _mapController = Completer<GoogleMapController>();
 
   /// google_maps_flutter 標準クラスタリングのグループ ID。
@@ -32,9 +35,10 @@ class _MapScreenState extends ConsumerState<MapScreen> {
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(mapControllerProvider.notifier).load();
-      _refreshBadge();
+      _refreshNotifications();
     });
     // 未読数を 30 秒ごとにポーリングする。
     _pollTimer =
@@ -43,12 +47,24 @@ class _MapScreenState extends ConsumerState<MapScreen> {
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
     super.dispose();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // アプリ復帰時にバッジと起動バナーを取り直す（FR-6.1）。
+    if (state == AppLifecycleState.resumed) _refreshNotifications();
+  }
+
   void _refreshBadge() =>
       ref.read(notificationBadgeProvider.notifier).refresh();
+
+  void _refreshNotifications() {
+    _refreshBadge();
+    ref.read(notificationBannerProvider.notifier).load();
+  }
 
   Future<void> _rebuildMarkers(MapState state) async {
     final markers = await buildPinMarkers(
@@ -88,21 +104,9 @@ class _MapScreenState extends ConsumerState<MapScreen> {
       }
     });
     final state = ref.watch(mapControllerProvider);
+    final banner = ref.watch(notificationBannerProvider);
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Layer'),
-        actions: const [_NotificationBadgeButton()],
-      ),
-      floatingActionButton: state.status == MapStatus.ready
-          ? FloatingActionButton(
-              heroTag: 'compose',
-              tooltip: 'Pin を立てる',
-              onPressed: () => context.push('/pin/compose'),
-              child: const Icon(Icons.add),
-            )
-          : null,
-      body: switch (state.status) {
+    final body = switch (state.status) {
         MapStatus.loading => const Center(child: CircularProgressIndicator()),
         MapStatus.serviceDisabled => _LocationGuide(
             title: '位置情報サービスがオフです',
@@ -135,7 +139,76 @@ class _MapScreenState extends ConsumerState<MapScreen> {
             },
             onRecenter: _onRecenter,
           ),
-      },
+    };
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Layer'),
+        actions: const [_NotificationBadgeButton()],
+      ),
+      floatingActionButton: state.status == MapStatus.ready
+          ? FloatingActionButton(
+              heroTag: 'compose',
+              tooltip: 'Pin を立てる',
+              onPressed: () => context.push('/pin/compose'),
+              child: const Icon(Icons.add),
+            )
+          : null,
+      body: Column(
+        children: [
+          if (banner != null)
+            _NotificationBanner(
+              notification: banner,
+              onTap: () => context.go('/notifications'),
+              onClose: () =>
+                  ref.read(notificationBannerProvider.notifier).dismiss(banner),
+            ),
+          Expanded(child: body),
+        ],
+      ),
+    );
+  }
+}
+
+/// 起動時の「お知らせ」バナー（issue #44）。
+class _NotificationBanner extends StatelessWidget {
+  const _NotificationBanner({
+    required this.notification,
+    required this.onTap,
+    required this.onClose,
+  });
+
+  final AppNotification notification;
+  final VoidCallback onTap;
+  final VoidCallback onClose;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      color: theme.colorScheme.primaryContainer,
+      child: InkWell(
+        onTap: onTap,
+        child: SafeArea(
+          bottom: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+            child: Row(
+              children: [
+                Text(notification.kindEmoji,
+                    style: const TextStyle(fontSize: 20)),
+                const SizedBox(width: 8),
+                Expanded(child: Text(notification.summary)),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: '閉じる',
+                  onPressed: onClose,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

@@ -21,6 +21,26 @@ class AppNotification {
   String? get requestId => payload['requestId'] as String?;
   String? get body => payload['body'] as String?;
 
+  bool get isUnread => readAt == null;
+
+  /// 種別アイコン（一覧・バナー共通）。
+  String get kindEmoji => switch (kind) {
+        'discovery' => '🎯',
+        'reaction' => '💛',
+        'friend_request' => '👋',
+        'friend_accepted' => '✅',
+        _ => '🔔',
+      };
+
+  /// 表示用の要約文（一覧・バナー共通）。
+  String get summary => switch (kind) {
+        'discovery' => '$displayName があなたと同じ場所に Pin を立てました',
+        'reaction' => '$displayName があなたの Pin に「わかる」を押しました',
+        'friend_request' => '$displayName から友達申請が届きました',
+        'friend_accepted' => '$displayName があなたの申請を承認しました',
+        _ => 'お知らせ',
+      };
+
   factory AppNotification.fromJson(Map<String, dynamic> json) =>
       AppNotification(
         id: json['id'] as String? ?? '',
