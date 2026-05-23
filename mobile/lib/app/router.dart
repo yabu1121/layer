@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/map/map_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
+import '../features/pin_compose/pin_compose_screen.dart';
 import '../features/signin/signin_screen.dart';
 import '../features/splash/splash_screen.dart';
 import 'main_shell.dart';
@@ -32,7 +33,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       // 静的な /pin/compose を /pin/:id より先に置き、優先的にマッチさせる。
       GoRoute(
         path: '/pin/compose',
-        builder: (context, state) => const PlaceholderScreen('PinCompose'),
+        builder: (context, state) => const PinComposeScreen(),
       ),
       GoRoute(
         path: '/pin/:id',

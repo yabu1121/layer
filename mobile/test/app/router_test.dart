@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:layer/app/router.dart';
 import 'package:layer/core/auth/auth_storage.dart';
+import 'package:layer/core/location/geocoding_service.dart';
 import 'package:layer/core/location/location_service.dart';
 import 'package:layer/features/notifications/notification_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -28,6 +29,11 @@ class _StubNotificationRepository implements NotificationRepository {
   Future<int> fetchUnreadCount() async => 0;
 }
 
+class _StubGeocoding implements GeocodingService {
+  @override
+  Future<String?> reverseGeocode(double lat, double lng) async => '東京都';
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -42,6 +48,7 @@ void main() {
         locationServiceProvider.overrideWithValue(_StubLocationService()),
         notificationRepositoryProvider
             .overrideWithValue(_StubNotificationRepository()),
+        geocodingServiceProvider.overrideWithValue(_StubGeocoding()),
       ],
     );
     addTearDown(container.dispose);
@@ -63,10 +70,10 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('位置情報サービスがオフです'), findsOneWidget);
 
-    // 静的ルート /pin/compose が /pin/:id より優先される。
+    // 静的ルート /pin/compose が /pin/:id より優先される（PinComposeScreen）。
     router.go('/pin/compose');
     await tester.pumpAndSettle();
-    expect(find.text('PinCompose'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'Pin を立てる'), findsOneWidget);
 
     // 動的パラメータ付きルート。
     router.go('/pin/abc123');

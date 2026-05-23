@@ -4,10 +4,17 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/api/api_client.dart';
 import '../../core/models/pin.dart';
 
-/// Pin 取得のリポジトリ（テストで差し替え可能なよう interface 化）。
+/// Pin 取得・投稿のリポジトリ（テストで差し替え可能なよう interface 化）。
 abstract interface class PinRepository {
   /// 自分 + 友達の可視 Pin を取得する（GET /api/pins/visible）。
   Future<List<Pin>> fetchVisible();
+
+  /// Pin を投稿する（POST /api/pins）。作成された Pin を返す。
+  Future<Pin> create({
+    required String body,
+    required double lat,
+    required double lng,
+  });
 }
 
 class ApiPinRepository implements PinRepository {
@@ -23,6 +30,19 @@ class ApiPinRepository implements PinRepository {
     return list
         .map((j) => Pin.fromJson((j as Map).cast<String, dynamic>()))
         .toList();
+  }
+
+  @override
+  Future<Pin> create({
+    required String body,
+    required double lat,
+    required double lng,
+  }) async {
+    final res = await _dio.post<Map<String, dynamic>>(
+      '/api/pins',
+      data: {'body': body, 'lat': lat, 'lng': lng},
+    );
+    return Pin.fromJson((res.data!['pin'] as Map).cast<String, dynamic>());
   }
 }
 

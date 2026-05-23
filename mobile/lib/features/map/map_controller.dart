@@ -85,6 +85,9 @@ class MapController extends Notifier<MapState> {
     await _loadPins();
   }
 
+  /// 可視 Pin を取り直す（Pin 投稿後など）。地図が表示済みであることが前提。
+  Future<void> refreshPins() => _loadPins();
+
   /// 可視 Pin と自分の UUID を取得して state に反映する。失敗しても地図は表示する。
   Future<void> _loadPins() async {
     try {
