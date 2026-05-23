@@ -4,6 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:layer/app/router.dart';
 import 'package:layer/core/auth/auth_storage.dart';
 import 'package:layer/core/location/location_service.dart';
+import 'package:layer/features/notifications/notification_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// /map（MapScreen）が実機の Geolocator を呼ばないようにするスタブ。
@@ -22,6 +23,11 @@ class _StubLocationService implements LocationService {
   Future<bool> openLocationSettings() async => true;
 }
 
+class _StubNotificationRepository implements NotificationRepository {
+  @override
+  Future<int> fetchUnreadCount() async => 0;
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -34,6 +40,8 @@ void main() {
       overrides: [
         authStorageProvider.overrideWithValue(storage),
         locationServiceProvider.overrideWithValue(_StubLocationService()),
+        notificationRepositoryProvider
+            .overrideWithValue(_StubNotificationRepository()),
       ],
     );
     addTearDown(container.dispose);
