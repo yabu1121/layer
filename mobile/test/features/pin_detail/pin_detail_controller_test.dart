@@ -1,9 +1,12 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:layer/core/auth/current_user.dart';
 import 'package:layer/core/location/geocoding_service.dart';
 import 'package:layer/core/models/pin.dart';
+import 'package:layer/core/models/user.dart';
 import 'package:layer/features/map/pin_repository.dart';
 import 'package:layer/features/pin_detail/pin_detail_controller.dart';
+import 'package:layer/features/pin_detail/reaction_repository.dart';
 
 Pin _pin(String id) => Pin(
       id: id,
@@ -51,11 +54,46 @@ class _FakeGeocoding implements GeocodingService {
   Future<String?> reverseGeocode(double lat, double lng) async => '新宿御苑';
 }
 
-ProviderContainer _container(_FakePinRepo repo) {
+PinAuthor _author(String id, String icon) =>
+    PinAuthor(id: id, userId: 'h$id', displayName: 'n$id', icon: icon);
+
+class _FakeReactionRepo implements ReactionRepository {
+  _FakeReactionRepo({List<PinAuthor>? initial}) : reactors = [...?initial];
+
+  List<PinAuthor> reactors;
+  bool throwIt = false;
+  int addCalls = 0;
+  int removeCalls = 0;
+
+  @override
+  Future<List<PinAuthor>> list(String pinId) async => List.of(reactors);
+
+  @override
+  Future<void> add(String pinId) async {
+    if (throwIt) throw Exception('boom');
+    addCalls++;
+  }
+
+  @override
+  Future<void> removeMine(String pinId) async {
+    if (throwIt) throw Exception('boom');
+    removeCalls++;
+  }
+}
+
+const _me = User(id: 'me-id', userId: 'me', displayName: 'Me', icon: '😀');
+
+ProviderContainer _container(
+  _FakePinRepo repo, {
+  _FakeReactionRepo? reactions,
+}) {
   final c = ProviderContainer(
     overrides: [
       pinRepositoryProvider.overrideWithValue(repo),
       geocodingServiceProvider.overrideWithValue(_FakeGeocoding()),
+      reactionRepositoryProvider
+          .overrideWithValue(reactions ?? _FakeReactionRepo()),
+      currentUserProvider.overrideWith((ref) async => _me),
     ],
   );
   addTearDown(c.dispose);
@@ -103,5 +141,57 @@ void main() {
     final c = _container(_FakePinRepo(throwIt: true));
     await c.read(pinDetailControllerProvider.notifier).load('p1');
     expect(c.read(pinDetailControllerProvider).status, PinDetailStatus.error);
+  });
+
+  test('load: 共感者と自分を取得し reactedByMe を判定', () async {
+    final reactions = _FakeReactionRepo(initial: [_author('me-id', '😀')]);
+    final c = _container(_FakePinRepo(), reactions: reactions);
+    await c.read(pinDetailControllerProvider.notifier).load('p1');
+    final s = c.read(pinDetailControllerProvider);
+    expect(s.reactionCount, 1);
+    expect(s.reactedByMe, isTrue);
+  });
+
+  test('toggle: 未押下→楽観的に +1 して add する', () async {
+    final reactions = _FakeReactionRepo(initial: [_author('other', '🌸')]);
+    final c = _container(_FakePinRepo(), reactions: reactions);
+    final n = c.read(pinDetailControllerProvider.notifier);
+    await n.load('p1');
+    expect(c.read(pinDetailControllerProvider).reactedByMe, isFalse);
+
+    final ok = await n.toggleReaction();
+    expect(ok, isTrue);
+    final s = c.read(pinDetailControllerProvider);
+    expect(s.reactedByMe, isTrue);
+    expect(s.reactionCount, 2);
+    expect(reactions.addCalls, 1);
+  });
+
+  test('toggle: 既押下→取消して removeMine する', () async {
+    final reactions = _FakeReactionRepo(initial: [_author('me-id', '😀')]);
+    final c = _container(_FakePinRepo(), reactions: reactions);
+    final n = c.read(pinDetailControllerProvider.notifier);
+    await n.load('p1');
+
+    final ok = await n.toggleReaction();
+    expect(ok, isTrue);
+    final s = c.read(pinDetailControllerProvider);
+    expect(s.reactedByMe, isFalse);
+    expect(s.reactionCount, 0);
+    expect(reactions.removeCalls, 1);
+  });
+
+  test('toggle: API 失敗でロールバックし false', () async {
+    final reactions = _FakeReactionRepo()..throwIt = true;
+    final c = _container(_FakePinRepo(), reactions: reactions);
+    final n = c.read(pinDetailControllerProvider.notifier);
+    await n.load('p1');
+    expect(c.read(pinDetailControllerProvider).reactionCount, 0);
+
+    final ok = await n.toggleReaction();
+    expect(ok, isFalse);
+    // ロールバックで元の 0 件に戻る。
+    expect(c.read(pinDetailControllerProvider).reactionCount, 0);
+    expect(c.read(pinDetailControllerProvider).reactedByMe, isFalse);
   });
 }
