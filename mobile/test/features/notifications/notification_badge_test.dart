@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:layer/features/notifications/app_notification.dart';
 import 'package:layer/features/notifications/notification_badge_controller.dart';
 import 'package:layer/features/notifications/notification_repository.dart';
 
@@ -41,6 +42,11 @@ class _FakeNotificationRepository implements NotificationRepository {
     if (throwError) throw Exception('network');
     return count;
   }
+
+  @override
+  Future<List<AppNotification>> list({int limit = 50}) async => const [];
+  @override
+  Future<void> markAllRead() async {}
 }
 
 void main() {

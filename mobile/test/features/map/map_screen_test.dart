@@ -8,6 +8,7 @@ import 'package:layer/core/models/pin.dart';
 import 'package:layer/core/models/user.dart';
 import 'package:layer/features/map/map_screen.dart';
 import 'package:layer/features/map/pin_repository.dart';
+import 'package:layer/features/notifications/app_notification.dart';
 import 'package:layer/features/notifications/notification_repository.dart';
 
 class _FakePinRepository implements PinRepository {
@@ -31,6 +32,10 @@ class _FakePinRepository implements PinRepository {
 class _FakeNotificationRepository implements NotificationRepository {
   @override
   Future<int> fetchUnreadCount() async => 0;
+  @override
+  Future<List<AppNotification>> list({int limit = 50}) async => const [];
+  @override
+  Future<void> markAllRead() async {}
 }
 
 class _FakeLocationService implements LocationService {
