@@ -101,8 +101,8 @@ class _NotificationTile extends StatelessWidget {
       // 発見通知だけ強調カラー。
       color: isDiscovery ? theme.colorScheme.primaryContainer : null,
       child: ListTile(
-        leading: Text(_kindEmoji(n.kind), style: const TextStyle(fontSize: 22)),
-        title: Text(_title(n)),
+        leading: Text(n.kindEmoji, style: const TextStyle(fontSize: 22)),
+        title: Text(n.summary),
         subtitle: Text(_timeAgo(n.createdAt)),
         trailing: n.kind == 'friend_request'
             ? Row(
@@ -121,25 +121,6 @@ class _NotificationTile extends StatelessWidget {
       ),
     );
   }
-}
-
-String _kindEmoji(String kind) => switch (kind) {
-      'discovery' => '🎯',
-      'reaction' => '💛',
-      'friend_request' => '👋',
-      'friend_accepted' => '✅',
-      _ => '🔔',
-    };
-
-String _title(AppNotification n) {
-  final name = n.displayName;
-  return switch (n.kind) {
-    'discovery' => '$name があなたと同じ場所に Pin を立てました',
-    'reaction' => '$name があなたの Pin に「わかる」を押しました',
-    'friend_request' => '$name から友達申請が届きました',
-    'friend_accepted' => '$name があなたの申請を承認しました',
-    _ => 'お知らせ',
-  };
 }
 
 /// 24 時間以内は相対表示、それ以降は M/D。

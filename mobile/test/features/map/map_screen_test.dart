@@ -30,10 +30,12 @@ class _FakePinRepository implements PinRepository {
 }
 
 class _FakeNotificationRepository implements NotificationRepository {
+  _FakeNotificationRepository([this.items = const []]);
+  final List<AppNotification> items;
   @override
   Future<int> fetchUnreadCount() async => 0;
   @override
-  Future<List<AppNotification>> list({int limit = 50}) async => const [];
+  Future<List<AppNotification>> list({int limit = 50}) async => items;
   @override
   Future<void> markAllRead() async {}
 }
@@ -63,12 +65,16 @@ class _FakeLocationService implements LocationService {
   Future<bool> openLocationSettings() async => true;
 }
 
-Widget _app(_FakeLocationService loc) => ProviderScope(
+Widget _app(
+  _FakeLocationService loc, {
+  List<AppNotification> notifications = const [],
+}) =>
+    ProviderScope(
       overrides: [
         locationServiceProvider.overrideWithValue(loc),
         pinRepositoryProvider.overrideWithValue(_FakePinRepository(const [])),
         notificationRepositoryProvider
-            .overrideWithValue(_FakeNotificationRepository()),
+            .overrideWithValue(_FakeNotificationRepository(notifications)),
         currentUserProvider.overrideWith(
           (ref) async => const User(
             id: 'me',
@@ -105,5 +111,24 @@ void main() {
 
     expect(find.byType(GoogleMap), findsOneWidget);
     expect(find.byTooltip('現在地'), findsOneWidget);
+  });
+
+  testWidgets('未読通知があると起動バナーを表示し、閉じられる', (tester) async {
+    final notif = AppNotification(
+      id: 'n1',
+      kind: 'discovery',
+      payload: const {'displayName': 'アヤ', 'icon': '🌸', 'pinId': 'p1'},
+      createdAt: DateTime(2026),
+    );
+    await tester.pumpWidget(
+      _app(_FakeLocationService(), notifications: [notif]),
+    );
+    await tester.pumpAndSettle();
+
+    expect(find.textContaining('同じ場所に Pin を立てました'), findsOneWidget);
+
+    await tester.tap(find.byTooltip('閉じる'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('同じ場所に Pin を立てました'), findsNothing);
   });
 }
