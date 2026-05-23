@@ -15,6 +15,12 @@ abstract interface class PinRepository {
     required double lat,
     required double lng,
   });
+
+  /// Pin 単体を取得する（GET /api/pins/:id）。
+  Future<Pin> getById(String id);
+
+  /// 同じ場所の近傍 Pin を取得する（GET /api/pins/:id/nearby）。
+  Future<List<Pin>> getNearby(String id);
 }
 
 class ApiPinRepository implements PinRepository {
@@ -43,6 +49,21 @@ class ApiPinRepository implements PinRepository {
       data: {'body': body, 'lat': lat, 'lng': lng},
     );
     return Pin.fromJson((res.data!['pin'] as Map).cast<String, dynamic>());
+  }
+
+  @override
+  Future<Pin> getById(String id) async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/pins/$id');
+    return Pin.fromJson((res.data!['pin'] as Map).cast<String, dynamic>());
+  }
+
+  @override
+  Future<List<Pin>> getNearby(String id) async {
+    final res = await _dio.get<Map<String, dynamic>>('/api/pins/$id/nearby');
+    final list = (res.data!['pins'] as List?) ?? const [];
+    return list
+        .map((j) => Pin.fromJson((j as Map).cast<String, dynamic>()))
+        .toList();
   }
 }
 

@@ -29,6 +29,10 @@ class _EmptyPins implements PinRepository {
   @override
   Future<List<Pin>> fetchVisible() async => const [];
   @override
+  Future<Pin> getById(String id) async => throw UnimplementedError();
+  @override
+  Future<List<Pin>> getNearby(String id) async => const [];
+  @override
   Future<Pin> create({
     required String body,
     required double lat,
