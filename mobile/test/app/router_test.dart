@@ -3,11 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:layer/app/router.dart';
 import 'package:layer/core/auth/auth_storage.dart';
+import 'package:layer/core/auth/current_user.dart';
 import 'package:layer/core/location/geocoding_service.dart';
 import 'package:layer/core/location/location_service.dart';
 import 'package:layer/core/models/pin.dart';
+import 'package:layer/core/models/user.dart';
 import 'package:layer/features/map/pin_repository.dart';
 import 'package:layer/features/notifications/notification_repository.dart';
+import 'package:layer/features/pin_detail/reaction_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// /map（MapScreen）が実機の Geolocator を呼ばないようにするスタブ。
@@ -60,6 +63,15 @@ class _StubPinRepository implements PinRepository {
       throw UnimplementedError();
 }
 
+class _StubReactionRepository implements ReactionRepository {
+  @override
+  Future<List<PinAuthor>> list(String pinId) async => const [];
+  @override
+  Future<void> add(String pinId) async {}
+  @override
+  Future<void> removeMine(String pinId) async {}
+}
+
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -76,6 +88,16 @@ void main() {
             .overrideWithValue(_StubNotificationRepository()),
         geocodingServiceProvider.overrideWithValue(_StubGeocoding()),
         pinRepositoryProvider.overrideWithValue(_StubPinRepository()),
+        reactionRepositoryProvider
+            .overrideWithValue(_StubReactionRepository()),
+        currentUserProvider.overrideWith(
+          (ref) async => const User(
+            id: 'me',
+            userId: 'me',
+            displayName: 'Me',
+            icon: '😀',
+          ),
+        ),
       ],
     );
     addTearDown(container.dispose);

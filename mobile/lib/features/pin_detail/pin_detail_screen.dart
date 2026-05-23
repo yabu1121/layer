@@ -24,6 +24,18 @@ class _PinDetailScreenState extends ConsumerState<PinDetailScreen> {
     });
   }
 
+  Future<void> _toggleReaction() async {
+    final ok =
+        await ref.read(pinDetailControllerProvider.notifier).toggleReaction();
+    if (!ok && mounted) {
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          const SnackBar(content: Text('「わかる」を更新できませんでした')),
+        );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pinDetailControllerProvider);
@@ -52,6 +64,7 @@ class _PinDetailScreenState extends ConsumerState<PinDetailScreen> {
                   onSelectPin: (id) => ref
                       .read(pinDetailControllerProvider.notifier)
                       .selectPin(id),
+                  onToggleReaction: _toggleReaction,
                   onRetry: () => ref
                       .read(pinDetailControllerProvider.notifier)
                       .load(widget.pinId),
@@ -70,12 +83,14 @@ class _SheetContent extends StatelessWidget {
     required this.state,
     required this.scrollController,
     required this.onSelectPin,
+    required this.onToggleReaction,
     required this.onRetry,
   });
 
   final PinDetailState state;
   final ScrollController scrollController;
   final void Function(String pinId) onSelectPin;
+  final VoidCallback onToggleReaction;
   final VoidCallback onRetry;
 
   @override
@@ -133,7 +148,13 @@ class _SheetContent extends StatelessWidget {
         ),
         Text('Pin ${state.totalCount} 件', style: theme.textTheme.bodySmall),
         const Divider(height: 24),
-        _PinCard(pin: main, isMain: true),
+        _PinCard(
+          pin: main,
+          isMain: true,
+          reactors: state.reactors,
+          reactedByMe: state.reactedByMe,
+          onToggleReaction: onToggleReaction,
+        ),
         if (state.nearby.isEmpty) ...[
           const SizedBox(height: 24),
           Center(
@@ -159,11 +180,23 @@ class _SheetContent extends StatelessWidget {
 }
 
 class _PinCard extends StatelessWidget {
-  const _PinCard({required this.pin, required this.isMain, this.onTap});
+  const _PinCard({
+    required this.pin,
+    required this.isMain,
+    this.onTap,
+    this.reactors,
+    this.reactedByMe = false,
+    this.onToggleReaction,
+  });
 
   final Pin pin;
   final bool isMain;
   final VoidCallback? onTap;
+
+  /// メイン Pin のみ非 null（共感者一覧）。null の近傍カードは表示専用。
+  final List<PinAuthor>? reactors;
+  final bool reactedByMe;
+  final VoidCallback? onToggleReaction;
 
   @override
   Widget build(BuildContext context) {
@@ -192,16 +225,66 @@ class _PinCard extends StatelessWidget {
               const SizedBox(height: 8),
               Text(pin.body),
               const SizedBox(height: 8),
-              // 「わかる」ボタンは表示のみ（トグル処理は #39）。
-              OutlinedButton.icon(
-                onPressed: null,
-                icon: const Text('💛'),
-                label: const Text('わかる'),
-              ),
+              if (reactors != null)
+                _ReactionBar(
+                  reactors: reactors!,
+                  reactedByMe: reactedByMe,
+                  onToggle: onToggleReaction,
+                )
+              else
+                // 近傍カードは表示のみ（タップでメインに切替）。
+                OutlinedButton.icon(
+                  onPressed: null,
+                  icon: const Text('💛'),
+                  label: const Text('わかる'),
+                ),
             ],
           ),
         ),
       ),
+    );
+  }
+}
+
+/// 「わかる」ボタン + 共感者アイコン（最大 5 + 残数）。
+class _ReactionBar extends StatelessWidget {
+  const _ReactionBar({
+    required this.reactors,
+    required this.reactedByMe,
+    required this.onToggle,
+  });
+
+  final List<PinAuthor> reactors;
+  final bool reactedByMe;
+  final VoidCallback? onToggle;
+
+  @override
+  Widget build(BuildContext context) {
+    final count = reactors.length;
+    final shown = reactors.take(5).toList();
+    final extra = count - shown.length;
+    return Row(
+      children: [
+        reactedByMe
+            ? FilledButton.icon(
+                onPressed: onToggle,
+                icon: const Icon(Icons.check, size: 18),
+                label: Text('わかる済み $count'),
+              )
+            : OutlinedButton.icon(
+                onPressed: onToggle,
+                icon: const Text('💛'),
+                label: Text('わかる $count'),
+              ),
+        const SizedBox(width: 8),
+        for (final r in shown)
+          Padding(
+            padding: const EdgeInsets.only(right: 2),
+            child: Text(r.icon, style: const TextStyle(fontSize: 16)),
+          ),
+        if (extra > 0)
+          Text('+$extra', style: Theme.of(context).textTheme.bodySmall),
+      ],
     );
   }
 }

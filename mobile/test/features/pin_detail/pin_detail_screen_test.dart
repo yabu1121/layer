@@ -1,10 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:layer/core/auth/current_user.dart';
 import 'package:layer/core/location/geocoding_service.dart';
 import 'package:layer/core/models/pin.dart';
+import 'package:layer/core/models/user.dart';
 import 'package:layer/features/map/pin_repository.dart';
 import 'package:layer/features/pin_detail/pin_detail_screen.dart';
+import 'package:layer/features/pin_detail/reaction_repository.dart';
 
 Pin _pin(String id) => Pin(
       id: id,
@@ -45,10 +48,28 @@ class _FakeGeocoding implements GeocodingService {
   Future<String?> reverseGeocode(double lat, double lng) async => '新宿御苑';
 }
 
+class _FakeReaction implements ReactionRepository {
+  @override
+  Future<List<PinAuthor>> list(String pinId) async => const [];
+  @override
+  Future<void> add(String pinId) async {}
+  @override
+  Future<void> removeMine(String pinId) async {}
+}
+
 Widget _app(List<Pin> nearby) => ProviderScope(
       overrides: [
         pinRepositoryProvider.overrideWithValue(_FakePinRepo(nearby)),
         geocodingServiceProvider.overrideWithValue(_FakeGeocoding()),
+        reactionRepositoryProvider.overrideWithValue(_FakeReaction()),
+        currentUserProvider.overrideWith(
+          (ref) async => const User(
+            id: 'me',
+            userId: 'me',
+            displayName: 'Me',
+            icon: '😀',
+          ),
+        ),
       ],
       child: const MaterialApp(home: PinDetailScreen(pinId: 'p1')),
     );

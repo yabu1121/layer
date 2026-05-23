@@ -1,8 +1,10 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/auth/current_user.dart';
 import '../../core/location/geocoding_service.dart';
 import '../../core/models/pin.dart';
 import '../map/pin_repository.dart';
+import 'reaction_repository.dart';
 
 enum PinDetailStatus { loading, ready, error }
 
@@ -12,6 +14,8 @@ class PinDetailState {
     this.mainPin,
     this.nearby = const [],
     this.locationLabel,
+    this.reactors = const [],
+    this.myAuthor,
   });
 
   final PinDetailStatus status;
@@ -19,14 +23,36 @@ class PinDetailState {
   final List<Pin> nearby;
   final String? locationLabel;
 
-  /// 同じ場所の Pin 総数（メイン + 近傍）。
+  /// メイン Pin の共感者（自分を含む場合あり）。
+  final List<PinAuthor> reactors;
+
+  /// 自分の公開プロフィール（楽観的更新で reactors に差し込む / 自分判定に使う）。
+  final PinAuthor? myAuthor;
+
   int get totalCount => (mainPin == null ? 0 : 1) + nearby.length;
+  int get reactionCount => reactors.length;
+  bool get reactedByMe =>
+      myAuthor != null && reactors.any((r) => r.id == myAuthor!.id);
+
+  PinDetailState copyWith({
+    PinDetailStatus? status,
+    Pin? mainPin,
+    List<Pin>? nearby,
+    String? locationLabel,
+    List<PinAuthor>? reactors,
+    PinAuthor? myAuthor,
+  }) =>
+      PinDetailState(
+        status: status ?? this.status,
+        mainPin: mainPin ?? this.mainPin,
+        nearby: nearby ?? this.nearby,
+        locationLabel: locationLabel ?? this.locationLabel,
+        reactors: reactors ?? this.reactors,
+        myAuthor: myAuthor ?? this.myAuthor,
+      );
 }
 
-/// PinDetailScreen のコントローラ（issue #38）。
-///
-/// メイン Pin と同じ場所の近傍 Pin、場所ラベルを取得する。
-/// 近傍 Pin タップ時は [selectPin] で同じ画面の内容を差し替える。
+/// PinDetailScreen のコントローラ（issue #38・#39）。
 class PinDetailController extends Notifier<PinDetailState> {
   @override
   PinDetailState build() => const PinDetailState();
@@ -40,19 +66,66 @@ class PinDetailController extends Notifier<PinDetailState> {
       final label = await ref
           .read(geocodingServiceProvider)
           .reverseGeocode(pin.lat, pin.lng);
+
+      // 共感と自分の情報はベストエフォート（失敗しても詳細は表示する）。
+      var reactors = <PinAuthor>[];
+      try {
+        reactors = await ref.read(reactionRepositoryProvider).list(pinId);
+      } catch (_) {}
+      PinAuthor? me;
+      try {
+        final user = await ref.read(currentUserProvider.future);
+        me = PinAuthor(
+          id: user.id,
+          userId: user.userId,
+          displayName: user.displayName,
+          icon: user.icon,
+        );
+      } catch (_) {}
+
       state = PinDetailState(
         status: PinDetailStatus.ready,
         mainPin: pin,
         nearby: nearby,
         locationLabel: label,
+        reactors: reactors,
+        myAuthor: me,
       );
     } catch (_) {
       state = const PinDetailState(status: PinDetailStatus.error);
     }
   }
 
-  /// 近傍 Pin を選び直して内容を差し替える。
   Future<void> selectPin(String pinId) => load(pinId);
+
+  /// 「わかる」をトグルする。楽観的に reactors を更新し、API 失敗で巻き戻す。
+  /// 成功で true、失敗（要再試行）で false を返す。
+  Future<bool> toggleReaction() async {
+    final current = state;
+    final me = current.myAuthor;
+    final pin = current.mainPin;
+    if (me == null || pin == null) return false;
+
+    final wasReacted = current.reactedByMe;
+    final previous = current.reactors;
+    final optimistic = wasReacted
+        ? previous.where((r) => r.id != me.id).toList()
+        : [...previous, me];
+    state = current.copyWith(reactors: optimistic);
+
+    try {
+      final repo = ref.read(reactionRepositoryProvider);
+      if (wasReacted) {
+        await repo.removeMine(pin.id);
+      } else {
+        await repo.add(pin.id);
+      }
+      return true;
+    } catch (_) {
+      state = state.copyWith(reactors: previous); // ロールバック
+      return false;
+    }
+  }
 }
 
 final pinDetailControllerProvider =
