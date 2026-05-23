@@ -9,6 +9,7 @@ import 'package:layer/core/location/location_service.dart';
 import 'package:layer/core/models/pin.dart';
 import 'package:layer/core/models/user.dart';
 import 'package:layer/features/map/pin_repository.dart';
+import 'package:layer/features/notifications/app_notification.dart';
 import 'package:layer/features/notifications/notification_repository.dart';
 
 class _GrantedLocation implements LocationService {
@@ -44,6 +45,10 @@ class _EmptyPins implements PinRepository {
 class _ZeroBadge implements NotificationRepository {
   @override
   Future<int> fetchUnreadCount() async => 0;
+  @override
+  Future<List<AppNotification>> list({int limit = 50}) async => const [];
+  @override
+  Future<void> markAllRead() async {}
 }
 
 class _StubGeocoding implements GeocodingService {
@@ -86,7 +91,7 @@ void main() {
 
     await tester.tap(find.text('通知'));
     await tester.pumpAndSettle();
-    expect(find.text('Notifications'), findsOneWidget);
+    expect(find.widgetWithText(AppBar, 'お知らせ'), findsOneWidget);
 
     await tester.tap(find.text('自分'));
     await tester.pumpAndSettle();

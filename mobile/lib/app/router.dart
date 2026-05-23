@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 
 import '../features/friends/friends_screen.dart';
 import '../features/map/map_screen.dart';
+import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/pin_compose/pin_compose_screen.dart';
 import '../features/pin_detail/pin_detail_screen.dart';
@@ -64,8 +65,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/notifications',
-                builder: (context, state) =>
-                    const PlaceholderScreen('Notifications'),
+                builder: (context, state) => const NotificationsScreen(),
               ),
             ],
           ),
