@@ -8,12 +8,18 @@ import 'package:layer/core/models/pin.dart';
 import 'package:layer/core/models/user.dart';
 import 'package:layer/features/map/map_screen.dart';
 import 'package:layer/features/map/pin_repository.dart';
+import 'package:layer/features/notifications/notification_repository.dart';
 
 class _FakePinRepository implements PinRepository {
   _FakePinRepository(this.pins);
   final List<Pin> pins;
   @override
   Future<List<Pin>> fetchVisible() async => pins;
+}
+
+class _FakeNotificationRepository implements NotificationRepository {
+  @override
+  Future<int> fetchUnreadCount() async => 0;
 }
 
 class _FakeLocationService implements LocationService {
@@ -45,6 +51,8 @@ Widget _app(_FakeLocationService loc) => ProviderScope(
       overrides: [
         locationServiceProvider.overrideWithValue(loc),
         pinRepositoryProvider.overrideWithValue(_FakePinRepository(const [])),
+        notificationRepositoryProvider
+            .overrideWithValue(_FakeNotificationRepository()),
         currentUserProvider.overrideWith(
           (ref) async => const User(
             id: 'me',

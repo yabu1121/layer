@@ -323,7 +323,7 @@ US-A6, US-A7, US-B5, US-B6, US-B7, US-C5, US-C6, US-D5, US-D6, US-E5, US-E6, US-
 - **状態管理**: Riverpod
 - **ルーティング**: go_router
 - **地図**: google_maps_flutter（API キーが必要）
-- **地図クラスタリング**: google_maps_cluster_manager（同一地点の複数 Pin をまとめる。`google_maps_flutter` 単体ではクラスタ表示できない）
+- **地図クラスタリング**: google_maps_flutter 標準のクラスタリング（`ClusterManager` / `ClusterManagerId`。2.5+ で同一地点付近の Pin をまとめられる。旧 `google_maps_cluster_manager` は 2.14 系と非互換のため不使用）
 - **位置情報**: geolocator
 - **逆ジオコーディング**: geocoding（座標 → 場所名。`google_maps_flutter` 単体ではできない）
 - **認証**: google_sign_in（取得した ID トークンを Go バックエンドで検証する）
@@ -477,7 +477,6 @@ dependencies:
   riverpod_annotation: ^2.3.0
   go_router: ^14.0.0
   google_maps_flutter: ^2.6.0
-  google_maps_cluster_manager: ^3.1.0
   geolocator: ^12.0.0
   geocoding: ^3.0.0
   google_sign_in: ^6.2.0
