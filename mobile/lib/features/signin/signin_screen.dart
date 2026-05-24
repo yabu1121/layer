@@ -1,8 +1,10 @@
+import 'package:flutter/foundation.dart' show kDebugMode, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import 'signin_controller.dart';
+import 'web_google_signin.dart';
 
 /// Google アカウントでサインインする画面（screens.md §2.2 / issue #31）。
 class SignInScreen extends ConsumerWidget {
@@ -39,23 +41,37 @@ class SignInScreen extends ConsumerWidget {
                 style: theme.textTheme.bodyLarge,
               ),
               const SizedBox(height: 48),
-              FilledButton.icon(
-                onPressed: isLoading ? null : () => _signIn(context, ref),
-                icon: isLoading
-                    ? const SizedBox(
-                        width: 18,
-                        height: 18,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.login),
-                label: const Text('Google でサインイン'),
-              ),
+              // Web は GIS 公式ボタン、ネイティブは google_sign_in の signIn()。
+              if (kIsWeb)
+                buildWebGoogleSignInButton(
+                  onIdToken: (idToken) => _signInWithIdToken(context, ref, idToken),
+                )
+              else
+                FilledButton.icon(
+                  onPressed: isLoading ? null : () => _signIn(context, ref),
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.login),
+                  label: const Text('Google でサインイン'),
+                ),
               const SizedBox(height: 24),
               Text(
                 '続行すると利用規約とプライバシーポリシーに同意したものとみなされます',
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodySmall,
               ),
+              // 開発ビルドのみ: Google を介さず入る（バックエンド DEV_AUTH_BYPASS 前提）。
+              if (kDebugMode) ...[
+                const SizedBox(height: 24),
+                OutlinedButton(
+                  onPressed: isLoading ? null : () => _signInDev(context, ref),
+                  child: const Text('開発用サインイン（dev）'),
+                ),
+              ],
             ],
           ),
         ),
@@ -67,6 +83,22 @@ class SignInScreen extends ConsumerWidget {
     final ok =
         await ref.read(signInControllerProvider.notifier).signInWithGoogle();
     // 成功時のみ Splash に戻して再判定させる。失敗・キャンセルは留まる。
+    if (ok && context.mounted) context.go('/');
+  }
+
+  Future<void> _signInWithIdToken(
+    BuildContext context,
+    WidgetRef ref,
+    String idToken,
+  ) async {
+    final ok = await ref
+        .read(signInControllerProvider.notifier)
+        .signInWithIdToken(idToken);
+    if (ok && context.mounted) context.go('/');
+  }
+
+  Future<void> _signInDev(BuildContext context, WidgetRef ref) async {
+    final ok = await ref.read(signInControllerProvider.notifier).signInDev();
     if (ok && context.mounted) context.go('/');
   }
 }

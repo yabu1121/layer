@@ -24,6 +24,8 @@ dependencies:
 
   # 認証
   google_sign_in: ^6.2.0
+  # Web の GIS ボタン（renderButton）を直接使うため明示依存にする。
+  google_sign_in_web: ^0.12.4
 
   # API 通信（Go バックエンド）
   dio: ^5.5.0
