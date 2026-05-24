@@ -16,6 +16,10 @@ type User struct {
 	AuthProvider string    `gorm:"not null" json:"-"`
 	AuthUID      string    `gorm:"uniqueIndex;not null" json:"-"`
 	CreatedAt    time.Time `json:"createdAt"`
+	// 現在地（点表示用）。未報告なら null。
+	LastLat        *float64   `json:"lastLat,omitempty"`
+	LastLng        *float64   `json:"lastLng,omitempty"`
+	LastLocationAt *time.Time `json:"lastLocationAt,omitempty"`
 }
 
 // Friendship は友達関係（pending / accepted / rejected）。
