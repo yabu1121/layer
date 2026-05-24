@@ -4,7 +4,11 @@ import (
 	"context"
 	"errors"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/cymed/layer/backend/internal/config"
 	"github.com/cymed/layer/backend/internal/database"
@@ -45,9 +49,24 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	log.Printf("listening on :%s", port)
-	if err := e.Start(":" + port); err != nil {
-		log.Printf("server stopped: %v", err)
-		os.Exit(1)
+
+	// サーバを別 goroutine で起動し、SIGINT/SIGTERM でグレースフルに停止する。
+	go func() {
+		log.Printf("listening on :%s", port)
+		if err := e.Start(":" + port); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			log.Fatalf("server stopped: %v", err)
+		}
+	}()
+
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+	log.Println("shutting down...")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(ctx); err != nil {
+		log.Fatalf("graceful shutdown failed: %v", err)
 	}
+	log.Println("server gracefully stopped")
 }

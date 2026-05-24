@@ -80,8 +80,9 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	e.Use(middleware.BodyLimit(maxBodyBytes)) // 過大ボディ防止
 	e.Use(middleware.CORSWithConfig(corsConfig()))
 
-	// /health は認証不要。
+	// /health（liveness）・/ready（readiness: DB ping）は認証不要。
 	e.GET("/health", handler.Health)
+	e.GET("/ready", handler.NewReadinessHandler(db).Ready)
 
 	pin := handler.NewPinHandler(db)
 	auth := handler.NewAuthHandler(db, verify)
