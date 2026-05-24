@@ -63,6 +63,14 @@ type Comment struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// Block はユーザーのブロック（US-A7）。blocker が blocked を遮断する。
+type Block struct {
+	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	BlockerID string    `gorm:"type:uuid;not null;index;uniqueIndex:idx_block_pair" json:"blockerId"`
+	BlockedID string    `gorm:"type:uuid;not null;index;uniqueIndex:idx_block_pair" json:"blockedId"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // PinDiscovery は発見ログ。
 type PinDiscovery struct {
 	ID          string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`

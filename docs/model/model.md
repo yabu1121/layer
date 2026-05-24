@@ -123,6 +123,26 @@ create index on comments (user_id);
 > US-C3。可視性は対象 Pin に準じる（友達限定。`PINS_PUBLIC` で公開）。`pin_id` は
 > `on delete cascade`（Pin 削除でコメントも消える）。FK は migration `006_comment_foreign_keys.sql`。
 
+### blocks
+
+```sql
+create table blocks (
+  id         uuid primary key default gen_random_uuid(),
+  blocker_id uuid not null references users(id) on delete cascade,
+  blocked_id uuid not null references users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  unique (blocker_id, blocked_id)
+);
+
+create index on blocks (blocker_id);
+create index on blocks (blocked_id);
+```
+
+> US-A7。`blocker` が `blocked` を遮断する。片方向のブロックでも双方の可視性を
+> 遮断する（`access.IsBlocked`）。ブロック時は両者の friendship を解消する。
+> FK は `on delete cascade`（ユーザー削除で消える）。migration `007_block_foreign_keys.sql`。
+> 可視性（Pin / 現在地 / 反応 / コメント）からの除外は別 issue で組み込む。
+
 ### pin_discoveries（発見ログ）
 
 ```sql
