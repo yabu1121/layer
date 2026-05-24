@@ -67,15 +67,10 @@ class PinComposeController extends Notifier<PinComposeState> {
     state = state.copyWith(isLocating: true);
     try {
       final pos = await ref.read(locationServiceProvider).currentPosition();
-      final label = await ref
-          .read(geocodingServiceProvider)
-          .reverseGeocode(pos.lat, pos.lng);
-      state = state.copyWith(
-        lat: pos.lat,
-        lng: pos.lng,
-        locationLabel: label,
-        isLocating: false,
-      );
+      // 先に位置を確定（地図表示はここで可能に）。
+      state = state.copyWith(lat: pos.lat, lng: pos.lng, isLocating: false);
+      // 場所ラベルは best-effort（geocoding は Web 非対応のことがある）。
+      await _updateLabel(pos.lat, pos.lng);
     } catch (_) {
       state = state.copyWith(isLocating: false);
     }
@@ -84,9 +79,20 @@ class PinComposeController extends Notifier<PinComposeState> {
   /// ピンドラッグで座標を更新し、場所ラベルを引き直す。
   Future<void> updateLocation(double lat, double lng) async {
     state = state.copyWith(lat: lat, lng: lng);
-    final label =
-        await ref.read(geocodingServiceProvider).reverseGeocode(lat, lng);
-    state = state.copyWith(locationLabel: label);
+    await _updateLabel(lat, lng);
+  }
+
+  /// 逆ジオコーディングでラベル更新（失敗しても無視）。
+  Future<void> _updateLabel(double lat, double lng) async {
+    try {
+      final label =
+          await ref.read(geocodingServiceProvider).reverseGeocode(lat, lng);
+      if (label != null && label.isNotEmpty) {
+        state = state.copyWith(locationLabel: label);
+      }
+    } catch (_) {
+      // Web 等で逆ジオコーディング不可でも投稿は続行できる。
+    }
   }
 
   void updateBody(String body) => state = state.copyWith(body: body);

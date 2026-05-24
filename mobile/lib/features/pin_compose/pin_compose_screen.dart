@@ -128,7 +128,8 @@ class _PinComposeScreenState extends ConsumerState<PinComposeScreen> {
                     const SizedBox(width: 4),
                     Expanded(
                       child: Text(
-                        state.locationLabel ?? '場所を取得中…',
+                        state.locationLabel ??
+                            (state.isLocating ? '場所を取得中…' : 'この場所'),
                         style: Theme.of(context).textTheme.bodyMedium,
                       ),
                     ),
