@@ -12,6 +12,35 @@ import '../notifications/notification_banner_controller.dart';
 import 'map_controller.dart';
 import 'map_markers.dart';
 
+/// コミカル（カートゥーン調）の地図スタイル。クリーム色の陸・明るい青の海・
+/// 緑の公園・グレーの道。文字は控えめで、商業施設(poi.business)のみ表示し
+/// 他の POI（建物名・アパート名など）のラベルは隠す。道路名/町名も非表示。
+/// 電車（路線＋駅）はオレンジで描画する。
+const _playfulMapStyle = '''
+[
+  {"elementType":"geometry","stylers":[{"color":"#fdf6e3"}]},
+  {"elementType":"labels.text.fill","stylers":[{"color":"#8a7d6b"}]},
+  {"elementType":"labels.text.stroke","stylers":[{"color":"#ffffff"},{"weight":3}]},
+  {"featureType":"administrative","elementType":"geometry.stroke","stylers":[{"color":"#e0c9a6"}]},
+  {"featureType":"administrative.neighborhood","elementType":"labels","stylers":[{"visibility":"off"}]},
+  {"featureType":"landscape.natural","elementType":"geometry","stylers":[{"color":"#eef7d8"}]},
+  {"featureType":"poi","elementType":"labels","stylers":[{"visibility":"off"}]},
+  {"featureType":"poi.business","elementType":"labels","stylers":[{"visibility":"on"}]},
+  {"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#b6e59e"}]},
+  {"featureType":"poi.park","elementType":"labels","stylers":[{"visibility":"off"}]},
+  {"featureType":"road","elementType":"geometry","stylers":[{"color":"#dcdcdc"}]},
+  {"featureType":"road","elementType":"labels","stylers":[{"visibility":"off"}]},
+  {"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#d2d2d2"}]},
+  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#c2c2c2"}]},
+  {"featureType":"road.highway","elementType":"geometry.stroke","stylers":[{"color":"#b0b0b0"}]},
+  {"featureType":"transit","elementType":"geometry","stylers":[{"color":"#f4a259"}]},
+  {"featureType":"transit.line","elementType":"labels","stylers":[{"visibility":"off"}]},
+  {"featureType":"transit.station","elementType":"labels.text","stylers":[{"visibility":"off"}]},
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#9ed8ff"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#3a8dde"}]}
+]
+''';
+
 /// アプリ中心の地図画面（screens.md §2.4 / issue #33〜#35・#44）。
 /// 現在地センタリング・可視 Pin マーカー・クラスタリング・通知バッジ/バナーを担う。
 class MapScreen extends ConsumerStatefulWidget {
@@ -302,6 +331,7 @@ class _MapView extends StatelessWidget {
             target: LatLng(center.lat, center.lng),
             zoom: 15,
           ),
+          style: _playfulMapStyle,
           markers: markers,
           circles: circles,
           clusterManagers: {
