@@ -116,6 +116,19 @@ void main() {
     expect(find.byTooltip('現在地'), findsOneWidget);
   });
 
+  testWidgets('凡例: タップで色の意味を開閉できる', (tester) async {
+    await tester.pumpWidget(_app(_FakeLocationService()));
+    await tester.pumpAndSettle();
+
+    expect(find.text('凡例'), findsOneWidget);
+    expect(find.text('友達の現在地'), findsNothing); // 折りたたみ時は非表示
+
+    await tester.tap(find.text('凡例'));
+    await tester.pumpAndSettle();
+    expect(find.text('自分'), findsOneWidget);
+    expect(find.text('友達の現在地'), findsOneWidget);
+  });
+
   testWidgets('未読通知があると起動バナーを表示し、閉じられる', (tester) async {
     final notif = AppNotification(
       id: 'n1',
