@@ -39,7 +39,9 @@ class _FakePinRepo implements PinRepository {
   Future<List<Pin>> getNearby(String id) async => nearbyById[id] ?? const [];
 
   @override
-  Future<List<Pin>> fetchVisible() async => const [];
+  Future<List<Pin>> fetchVisible({bool friendsOnly = false}) async => const [];
+  @override
+  Future<void> delete(String id) async {}
   @override
   Future<Pin> create({
     required String body,

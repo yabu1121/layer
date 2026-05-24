@@ -33,7 +33,9 @@ class _FakePinRepo implements PinRepository {
   @override
   Future<List<Pin>> getNearby(String id) async => nearby;
   @override
-  Future<List<Pin>> fetchVisible() async => const [];
+  Future<List<Pin>> fetchVisible({bool friendsOnly = false}) async => const [];
+  @override
+  Future<void> delete(String id) async {}
   @override
   Future<Pin> create({
     required String body,
@@ -81,9 +83,16 @@ void main() {
 
     expect(find.text('新宿御苑'), findsOneWidget);
     expect(find.text('body-p1'), findsOneWidget); // メイン
-    expect(find.text('body-p2'), findsOneWidget); // 近傍
     expect(find.text('── 同じ場所の Pin ──'), findsOneWidget);
-    expect(find.text('わかる'), findsWidgets); // ボタン表示
+    expect(find.textContaining('わかる'), findsWidgets); // ボタン表示
+
+    // 近傍カードは下にあるためスクロールして確認する。
+    await tester.scrollUntilVisible(
+      find.text('body-p2'),
+      200,
+      scrollable: find.byType(Scrollable).last,
+    );
+    expect(find.text('body-p2'), findsOneWidget); // 近傍
   });
 
   testWidgets('近傍 0 件で空メッセージ', (tester) async {

@@ -48,6 +48,8 @@ class _FakeFriendRepo implements FriendRepository {
       SendRequestResult.sent;
   @override
   Future<List<IncomingRequest>> listIncoming() async => const [];
+  @override
+  Future<void> unfriend(String userId) async {}
 }
 
 ProviderContainer _container(_FakeNotifRepo repo, {_FakeFriendRepo? friend}) {

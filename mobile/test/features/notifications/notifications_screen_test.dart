@@ -39,6 +39,8 @@ class _FakeFriendRepo implements FriendRepository {
       SendRequestResult.sent;
   @override
   Future<List<IncomingRequest>> listIncoming() async => const [];
+  @override
+  Future<void> unfriend(String userId) async {}
 }
 
 Widget _app(List<AppNotification> items) => ProviderScope(
