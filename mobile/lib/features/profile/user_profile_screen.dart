@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/api/api_error.dart';
 import '../../core/models/pin.dart';
+import '../../core/widgets/error_view.dart';
 import '../map/pin_repository.dart';
 
 /// 指定ユーザーの投稿一覧（可視 Pin を著者で絞り込む）。
@@ -64,9 +66,12 @@ class UserProfileScreen extends ConsumerWidget {
               padding: EdgeInsets.all(24),
               child: Center(child: CircularProgressIndicator()),
             ),
-            error: (_, __) => const Padding(
-              padding: EdgeInsets.all(24),
-              child: Center(child: Text('投稿を取得できませんでした')),
+            error: (e, _) => Padding(
+              padding: const EdgeInsets.all(24),
+              child: ErrorView(
+                message: friendlyErrorMessage(e),
+                onRetry: () => ref.invalidate(userPinsProvider(user.id)),
+              ),
             ),
           ),
         ],
