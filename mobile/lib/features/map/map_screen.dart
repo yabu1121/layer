@@ -106,6 +106,23 @@ class _MapScreenState extends ConsumerState<MapScreen>
     final state = ref.watch(mapControllerProvider);
     final banner = ref.watch(notificationBannerProvider);
 
+    // Pin マーカー + 現在地マーカー（青）。現在地はクラスタ対象外。
+    final center = state.center;
+    final markers = center == null
+        ? _markers
+        : {
+            ..._markers,
+            Marker(
+              markerId: const MarkerId('current-location'),
+              position: LatLng(center.lat, center.lng),
+              icon: BitmapDescriptor.defaultMarkerWithHue(
+                BitmapDescriptor.hueAzure,
+              ),
+              infoWindow: const InfoWindow(title: '現在地'),
+              zIndexInt: 1000,
+            ),
+          };
+
     final body = switch (state.status) {
         MapStatus.loading => const Center(child: CircularProgressIndicator()),
         MapStatus.serviceDisabled => _LocationGuide(
@@ -129,7 +146,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
           ),
         MapStatus.ready => _MapView(
             center: state.center!,
-            markers: _markers,
+            markers: markers,
             clusterManagerId: _clusterManagerId,
             onClusterTap: _onClusterTap,
             onMapCreated: (controller) {
