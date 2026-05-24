@@ -141,6 +141,16 @@ void main() {
     expect(find.text('ここではまだあなただけです'), findsOneWidget);
   });
 
+  testWidgets('わかる タップで状態が切り替わる（ポップ演出込み）', (tester) async {
+    await tester.pumpWidget(_app(const []));
+    await tester.pumpAndSettle();
+
+    expect(find.text('わかる 0'), findsOneWidget);
+    await tester.tap(find.text('わかる 0'));
+    await tester.pumpAndSettle(); // ポップ演出の完了を待つ
+    expect(find.text('わかる済み 1'), findsOneWidget);
+  });
+
   testWidgets('imageUrl があれば画像を表示する', (tester) async {
     await tester.pumpWidget(
       _app(const [], mainImageUrl: 'https://cdn.example/r2/x.jpg'),
