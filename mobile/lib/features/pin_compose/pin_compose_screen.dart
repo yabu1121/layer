@@ -164,6 +164,36 @@ class _PinComposeScreenState extends ConsumerState<PinComposeScreen> {
                   ),
                   onChanged: notifier.updateBody,
                 ),
+                const SizedBox(height: 12),
+                if (state.image != null)
+                  Stack(
+                    alignment: Alignment.topRight,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.memory(
+                          state.image!.bytes,
+                          height: 160,
+                          width: double.infinity,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.all(4),
+                        child: IconButton.filledTonal(
+                          onPressed: notifier.clearImage,
+                          icon: const Icon(Icons.close),
+                          tooltip: '写真を削除',
+                        ),
+                      ),
+                    ],
+                  )
+                else
+                  OutlinedButton.icon(
+                    onPressed: () => notifier.pickImage(),
+                    icon: const Icon(Icons.add_photo_alternate_outlined),
+                    label: const Text('写真を追加'),
+                  ),
               ],
             ),
           ),

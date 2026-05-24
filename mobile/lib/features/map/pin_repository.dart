@@ -15,6 +15,7 @@ abstract interface class PinRepository {
     required String body,
     required double lat,
     required double lng,
+    String? imageUrl,
   });
 
   /// Pin 単体を取得する（GET /api/pins/:id）。
@@ -54,10 +55,16 @@ class ApiPinRepository implements PinRepository {
     required String body,
     required double lat,
     required double lng,
+    String? imageUrl,
   }) async {
     final res = await _dio.post<Map<String, dynamic>>(
       '/api/pins',
-      data: {'body': body, 'lat': lat, 'lng': lng},
+      data: {
+        'body': body,
+        'lat': lat,
+        'lng': lng,
+        if (imageUrl != null) 'image_url': imageUrl,
+      },
     );
     return Pin.fromJson((res.data!['pin'] as Map).cast<String, dynamic>());
   }

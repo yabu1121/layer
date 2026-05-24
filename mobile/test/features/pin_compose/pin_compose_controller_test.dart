@@ -1,9 +1,13 @@
+import 'dart:typed_data';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:layer/core/location/geocoding_service.dart';
 import 'package:layer/core/location/location_service.dart';
+import 'package:layer/core/media/image_picker_service.dart';
 import 'package:layer/core/models/pin.dart';
 import 'package:layer/features/map/pin_repository.dart';
+import 'package:layer/features/pin_compose/image_upload_repository.dart';
 import 'package:layer/features/pin_compose/pin_compose_controller.dart';
 
 class _FakeLocation implements LocationService {
@@ -29,11 +33,28 @@ class _FakeGeocoding implements GeocodingService {
   Future<String?> reverseGeocode(double lat, double lng) async => label;
 }
 
+class _FakeImagePicker implements ImagePickerService {
+  _FakeImagePicker(this.result);
+  final PickedImage? result;
+  @override
+  Future<PickedImage?> pick() async => result;
+}
+
+class _FakeImageUpload implements ImageUploadRepository {
+  String? uploadedContentType;
+  @override
+  Future<String> uploadPinImage(Uint8List bytes, String contentType) async {
+    uploadedContentType = contentType;
+    return 'https://cdn.example/pin-images/uploaded.jpg';
+  }
+}
+
 class _FakePinRepo implements PinRepository {
   bool throwOnCreate = false;
   String? createdBody;
   double? createdLat;
   double? createdLng;
+  String? createdImageUrl;
 
   @override
   Future<List<Pin>> fetchVisible({bool friendsOnly = false}) async => const [];
@@ -51,11 +72,13 @@ class _FakePinRepo implements PinRepository {
     required String body,
     required double lat,
     required double lng,
+    String? imageUrl,
   }) async {
     if (throwOnCreate) throw Exception('network');
     createdBody = body;
     createdLat = lat;
     createdLng = lng;
+    createdImageUrl = imageUrl;
     return Pin(
       id: 'new',
       ownerId: 'me',
@@ -72,12 +95,18 @@ ProviderContainer _container({
   LatLngPoint pos = const LatLngPoint(35.0, 139.0),
   String? label = '東京都新宿区',
   _FakePinRepo? repo,
+  _FakeImagePicker? picker,
+  _FakeImageUpload? upload,
 }) {
   final c = ProviderContainer(
     overrides: [
       locationServiceProvider.overrideWithValue(_FakeLocation(pos)),
       geocodingServiceProvider.overrideWithValue(_FakeGeocoding(label)),
       pinRepositoryProvider.overrideWithValue(repo ?? _FakePinRepo()),
+      imagePickerServiceProvider
+          .overrideWithValue(picker ?? _FakeImagePicker(null)),
+      imageUploadRepositoryProvider
+          .overrideWithValue(upload ?? _FakeImageUpload()),
     ],
   );
   addTearDown(c.dispose);
@@ -147,6 +176,49 @@ void main() {
 
     expect(await n.submit(), PinComposeResult.invalid);
     expect(repo.createdBody, isNull);
+  });
+
+  test('画像添付: pick → submit で R2 にアップロードし image_url を渡す', () async {
+    final repo = _FakePinRepo();
+    final upload = _FakeImageUpload();
+    final picker = _FakeImagePicker(
+      PickedImage(bytes: Uint8List.fromList([1, 2, 3]), contentType: 'image/png'),
+    );
+    final c = _container(repo: repo, upload: upload, picker: picker);
+    final n = c.read(pinComposeControllerProvider.notifier);
+    await n.initialize();
+    n.updateBody('写真つき');
+
+    await n.pickImage();
+    expect(c.read(pinComposeControllerProvider).image, isNotNull);
+
+    final result = await n.submit();
+    expect(result, PinComposeResult.success);
+    expect(upload.uploadedContentType, 'image/png');
+    expect(repo.createdImageUrl, 'https://cdn.example/pin-images/uploaded.jpg');
+  });
+
+  test('画像なし: image_url は null で create する', () async {
+    final repo = _FakePinRepo();
+    final c = _container(repo: repo);
+    final n = c.read(pinComposeControllerProvider.notifier);
+    await n.initialize();
+    n.updateBody('画像なし');
+    await n.submit();
+    expect(repo.createdImageUrl, isNull);
+  });
+
+  test('clearImage: 選択を取り消せる', () async {
+    final picker = _FakeImagePicker(
+      PickedImage(bytes: Uint8List.fromList([9]), contentType: 'image/jpeg'),
+    );
+    final c = _container(picker: picker);
+    final n = c.read(pinComposeControllerProvider.notifier);
+    await n.initialize();
+    await n.pickImage();
+    expect(c.read(pinComposeControllerProvider).image, isNotNull);
+    n.clearImage();
+    expect(c.read(pinComposeControllerProvider).image, isNull);
   });
 
   test('submit 失敗: error を返し再送信できる', () async {
