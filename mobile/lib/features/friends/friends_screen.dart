@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/models/pin.dart';
 import '../../core/share/share_service.dart';
@@ -45,6 +46,29 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   Future<void> _reject(IncomingRequest req) async {
     final ok = await ref.read(friendsControllerProvider.notifier).reject(req);
     if (!ok && mounted) _snack('拒否に失敗しました');
+  }
+
+  Future<void> _unfriend(PinAuthor friend) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('${friend.displayName} を友達から外しますか？'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('解除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final ok =
+        await ref.read(friendsControllerProvider.notifier).unfriend(friend);
+    if (!ok && mounted) _snack('解除に失敗しました');
   }
 
   Future<void> _invite() async {
@@ -109,6 +133,12 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
                 leading: Text(f.icon, style: const TextStyle(fontSize: 24)),
                 title: Text(f.displayName),
                 subtitle: Text('@${f.userId}'),
+                onTap: () => context.push('/users/${f.id}', extra: f),
+                trailing: IconButton(
+                  icon: const Icon(Icons.person_remove_outlined),
+                  tooltip: '友達を解除',
+                  onPressed: () => _unfriend(f),
+                ),
               ),
           Padding(
             padding: const EdgeInsets.all(16),

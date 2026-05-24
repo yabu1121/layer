@@ -1,6 +1,8 @@
+import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../core/models/pin.dart';
 import '../features/friends/friends_screen.dart';
 import '../features/map/map_screen.dart';
 import '../features/notifications/notifications_screen.dart';
@@ -8,6 +10,7 @@ import '../features/onboarding/onboarding_screen.dart';
 import '../features/pin_compose/pin_compose_screen.dart';
 import '../features/pin_detail/pin_detail_screen.dart';
 import '../features/profile/profile_screen.dart';
+import '../features/profile/user_profile_screen.dart';
 import '../features/signin/signin_screen.dart';
 import '../features/splash/splash_screen.dart';
 import 'main_shell.dart';
@@ -37,6 +40,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/friends',
         builder: (context, state) => const FriendsScreen(),
+      ),
+      // 他ユーザーのプロフィール（友達一覧などから extra で PinAuthor を渡す）。
+      GoRoute(
+        path: '/users/:id',
+        builder: (context, state) {
+          final user = state.extra as PinAuthor?;
+          if (user == null) {
+            return const Scaffold(
+              body: Center(child: Text('ユーザー情報がありません')),
+            );
+          }
+          return UserProfileScreen(user: user);
+        },
       ),
       // 静的な /pin/compose を /pin/:id より先に置き、優先的にマッチさせる。
       GoRoute(

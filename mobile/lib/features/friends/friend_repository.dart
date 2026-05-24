@@ -43,6 +43,9 @@ abstract interface class FriendRepository {
 
   /// 申請を拒否する（POST /api/friends/requests/:id/reject）。
   Future<void> reject(String requestId);
+
+  /// 友達を解除する（DELETE /api/friends/:userId）。
+  Future<void> unfriend(String userId);
 }
 
 class ApiFriendRepository implements FriendRepository {
@@ -113,6 +116,11 @@ class ApiFriendRepository implements FriendRepository {
   @override
   Future<void> reject(String requestId) async {
     await _dio.post<dynamic>('/api/friends/requests/$requestId/reject');
+  }
+
+  @override
+  Future<void> unfriend(String userId) async {
+    await _dio.delete<dynamic>('/api/friends/$userId');
   }
 }
 

@@ -37,6 +37,15 @@ class ProfileScreen extends ConsumerWidget {
           const SizedBox(height: 32),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: FilledButton.icon(
+              onPressed: () => context.push('/friends'),
+              icon: const Icon(Icons.group),
+              label: const Text('友達を管理'),
+            ),
+          ),
+          const SizedBox(height: 12),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: OutlinedButton.icon(
               onPressed: () => _confirmLogout(context, ref),
               icon: const Icon(Icons.logout),
