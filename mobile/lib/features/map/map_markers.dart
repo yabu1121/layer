@@ -1,5 +1,6 @@
 import 'dart:ui' as ui;
 
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
@@ -60,10 +61,21 @@ Future<Set<Marker>> buildPinMarkers({
 }) async {
   final markers = <Marker>{};
   for (final pin in pins) {
-    final icon = await renderPinMarkerIcon(
-      emoji: pin.author.icon,
-      ringColor: markerColorFor(mine: pin.isMine(myUserId)),
-    );
+    final mine = pin.isMine(myUserId);
+    // Web ではカスタム画像マーカーが描画できず「壊れた画像」になるため、
+    // 標準マーカー（色分け）を使う。実機は絵文字付きカスタムマーカー。
+    final BitmapDescriptor icon;
+    if (kIsWeb) {
+      // 現在地（青）と区別するため、投稿 Pin は 自分=赤 / 友達=オレンジ。
+      icon = BitmapDescriptor.defaultMarkerWithHue(
+        mine ? BitmapDescriptor.hueRed : BitmapDescriptor.hueOrange,
+      );
+    } else {
+      icon = await renderPinMarkerIcon(
+        emoji: pin.author.icon,
+        ringColor: markerColorFor(mine: mine),
+      );
+    }
     markers.add(
       Marker(
         markerId: MarkerId(pin.id),

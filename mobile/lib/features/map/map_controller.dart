@@ -4,6 +4,7 @@ import '../../core/auth/current_user.dart';
 import '../../core/location/location_service.dart';
 import '../../core/models/pin.dart';
 import 'pin_repository.dart';
+import 'user_location_repository.dart';
 
 /// MapScreen の表示状態。
 enum MapStatus {
@@ -20,6 +21,8 @@ class MapState {
     this.permanentlyDenied = false,
     this.pins = const [],
     this.myUserId,
+    this.otherLocations = const [],
+    this.friendsOnly = false,
   });
 
   final MapStatus status;
@@ -36,11 +39,19 @@ class MapState {
   /// 自分の UUID（マーカー色の出し分け用）。
   final String? myUserId;
 
+  /// 他ユーザーの現在地（点表示用）。
+  final List<LatLngPoint> otherLocations;
+
+  /// Pin の表示範囲: true=友達のみ / false=全員。
+  final bool friendsOnly;
+
   MapState copyWith({
     MapStatus? status,
     LatLngPoint? center,
     List<Pin>? pins,
     String? myUserId,
+    List<LatLngPoint>? otherLocations,
+    bool? friendsOnly,
   }) =>
       MapState(
         status: status ?? this.status,
@@ -48,6 +59,8 @@ class MapState {
         permanentlyDenied: permanentlyDenied,
         pins: pins ?? this.pins,
         myUserId: myUserId ?? this.myUserId,
+        otherLocations: otherLocations ?? this.otherLocations,
+        friendsOnly: friendsOnly ?? this.friendsOnly,
       );
 }
 
@@ -80,18 +93,37 @@ class MapController extends Notifier<MapState> {
     }
 
     final pos = await location.currentPosition();
-    // 先に地図を表示し、Pin はベストエフォートで載せる。
-    state = MapState(status: MapStatus.ready, center: pos);
+    // 先に地図を表示し、Pin・他者位置はベストエフォートで載せる。
+    state = MapState(
+      status: MapStatus.ready,
+      center: pos,
+      friendsOnly: state.friendsOnly,
+    );
     await _loadPins();
+    await _loadLocations(pos);
   }
 
   /// 可視 Pin を取り直す（Pin 投稿後など）。地図が表示済みであることが前提。
   Future<void> refreshPins() => _loadPins();
 
+  /// 自分の現在地を報告し、他ユーザーの現在地（点表示用）を取得する。
+  Future<void> _loadLocations(LatLngPoint me) async {
+    try {
+      final repo = ref.read(userLocationRepositoryProvider);
+      await repo.updateMine(me.lat, me.lng);
+      final others = await repo.fetchOthers();
+      state = state.copyWith(otherLocations: others);
+    } catch (_) {
+      // 取得失敗時は点表示なし（地図は表示する）。
+    }
+  }
+
   /// 可視 Pin と自分の UUID を取得して state に反映する。失敗しても地図は表示する。
   Future<void> _loadPins() async {
     try {
-      final pins = await ref.read(pinRepositoryProvider).fetchVisible();
+      final pins = await ref
+          .read(pinRepositoryProvider)
+          .fetchVisible(friendsOnly: state.friendsOnly);
       String? myId;
       try {
         myId = (await ref.read(currentUserProvider.future)).id;
@@ -102,6 +134,13 @@ class MapController extends Notifier<MapState> {
     } catch (_) {
       // Pin 取得失敗時は地図のみ表示。
     }
+  }
+
+  /// 表示範囲（友達のみ / 全員）を切り替えて Pin を取り直す。
+  Future<void> setFriendsOnly(bool value) async {
+    if (state.friendsOnly == value) return;
+    state = state.copyWith(friendsOnly: value);
+    await _loadPins();
   }
 
   /// 現在地ボタン: 位置を取り直して center を更新する（カメラ移動は画面側）。

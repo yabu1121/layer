@@ -116,12 +116,28 @@ class _MapScreenState extends ConsumerState<MapScreen>
               markerId: const MarkerId('current-location'),
               position: LatLng(center.lat, center.lng),
               icon: BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueAzure,
+                BitmapDescriptor.hueAzure, // 現在地は青（投稿 Pin と区別）
               ),
               infoWindow: const InfoWindow(title: '現在地'),
               zIndexInt: 1000,
             ),
           };
+
+    // 他ユーザーの現在地は「点」（Circle）で表示（人物は出さない）。
+    final circles = <Circle>{
+      for (var i = 0; i < state.otherLocations.length; i++)
+        Circle(
+          circleId: CircleId('other-loc-$i'),
+          center: LatLng(
+            state.otherLocations[i].lat,
+            state.otherLocations[i].lng,
+          ),
+          radius: 12,
+          fillColor: Colors.purple.withValues(alpha: 0.6),
+          strokeColor: Colors.purple,
+          strokeWidth: 2,
+        ),
+    };
 
     final body = switch (state.status) {
         MapStatus.loading => const Center(child: CircularProgressIndicator()),
@@ -147,6 +163,10 @@ class _MapScreenState extends ConsumerState<MapScreen>
         MapStatus.ready => _MapView(
             center: state.center!,
             markers: markers,
+            circles: circles,
+            friendsOnly: state.friendsOnly,
+            onFriendsOnlyChanged: (v) =>
+                ref.read(mapControllerProvider.notifier).setFriendsOnly(v),
             clusterManagerId: _clusterManagerId,
             onClusterTap: _onClusterTap,
             onMapCreated: (controller) {
@@ -254,6 +274,9 @@ class _MapView extends StatelessWidget {
   const _MapView({
     required this.center,
     required this.markers,
+    required this.circles,
+    required this.friendsOnly,
+    required this.onFriendsOnlyChanged,
     required this.clusterManagerId,
     required this.onClusterTap,
     required this.onMapCreated,
@@ -262,6 +285,9 @@ class _MapView extends StatelessWidget {
 
   final LatLngPoint center;
   final Set<Marker> markers;
+  final Set<Circle> circles;
+  final bool friendsOnly;
+  final void Function(bool) onFriendsOnlyChanged;
   final ClusterManagerId clusterManagerId;
   final void Function(Cluster) onClusterTap;
   final void Function(GoogleMapController) onMapCreated;
@@ -277,6 +303,7 @@ class _MapView extends StatelessWidget {
             zoom: 15,
           ),
           markers: markers,
+          circles: circles,
           clusterManagers: {
             ClusterManager(
               clusterManagerId: clusterManagerId,
@@ -286,6 +313,27 @@ class _MapView extends StatelessWidget {
           myLocationEnabled: true,
           myLocationButtonEnabled: false, // 自前の現在地ボタンを使う
           onMapCreated: onMapCreated,
+        ),
+        // Pin の表示範囲フィルタ（全部 / 友達）。
+        Positioned(
+          top: 12,
+          left: 0,
+          right: 0,
+          child: Center(
+            child: Material(
+              elevation: 2,
+              borderRadius: BorderRadius.circular(20),
+              child: SegmentedButton<bool>(
+                showSelectedIcon: false,
+                segments: const [
+                  ButtonSegment(value: false, label: Text('全部')),
+                  ButtonSegment(value: true, label: Text('友達')),
+                ],
+                selected: {friendsOnly},
+                onSelectionChanged: (s) => onFriendsOnlyChanged(s.first),
+              ),
+            ),
+          ),
         ),
         Positioned(
           right: 16,
