@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/models/pin.dart';
 import '../../core/share/share_service.dart';
+import '../../core/widgets/appear.dart';
 import 'friend_repository.dart';
 import 'friends_controller.dart';
 
@@ -128,16 +129,21 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
               child: Center(child: Text('友達を招待して、Layer をはじめましょう')),
             )
           else
-            for (final f in state.friends)
-              ListTile(
-                leading: Text(f.icon, style: const TextStyle(fontSize: 24)),
-                title: Text(f.displayName),
-                subtitle: Text('@${f.userId}'),
-                onTap: () => context.push('/users/${f.id}', extra: f),
-                trailing: IconButton(
-                  icon: const Icon(Icons.person_remove_outlined),
-                  tooltip: '友達を解除',
-                  onPressed: () => _unfriend(f),
+            for (var i = 0; i < state.friends.length; i++)
+              Appear(
+                index: i,
+                child: ListTile(
+                  leading: Text(state.friends[i].icon,
+                      style: const TextStyle(fontSize: 24)),
+                  title: Text(state.friends[i].displayName),
+                  subtitle: Text('@${state.friends[i].userId}'),
+                  onTap: () => context.push('/users/${state.friends[i].id}',
+                      extra: state.friends[i]),
+                  trailing: IconButton(
+                    icon: const Icon(Icons.person_remove_outlined),
+                    tooltip: '友達を解除',
+                    onPressed: () => _unfriend(state.friends[i]),
+                  ),
                 ),
               ),
           Padding(

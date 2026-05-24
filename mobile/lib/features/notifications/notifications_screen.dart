@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/widgets/appear.dart';
 import '../../core/widgets/empty_view.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
@@ -65,10 +66,13 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
             : ListView.separated(
                 itemCount: state.items.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),
-                itemBuilder: (context, i) => _NotificationTile(
-                  notification: state.items[i],
-                  onAccept: () => _accept(state.items[i]),
-                  onReject: () => _reject(state.items[i]),
+                itemBuilder: (context, i) => Appear(
+                  index: i,
+                  child: _NotificationTile(
+                    notification: state.items[i],
+                    onAccept: () => _accept(state.items[i]),
+                    onReject: () => _reject(state.items[i]),
+                  ),
                 ),
               ),
       },
