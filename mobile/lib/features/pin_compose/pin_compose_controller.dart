@@ -2,10 +2,15 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/location/geocoding_service.dart';
 import '../../core/location/location_service.dart';
+import '../../core/media/image_picker_service.dart';
 import '../map/map_controller.dart';
 import '../map/pin_repository.dart';
+import 'image_upload_repository.dart';
 
 enum PinComposeResult { invalid, success, error }
+
+/// copyWith で image を「明示的に null へ」できるようにするセンチネル。
+const _imageSentinel = Object();
 
 /// Pin 投稿フォームの状態。
 class PinComposeState {
@@ -16,6 +21,7 @@ class PinComposeState {
     this.body = '',
     this.isLocating = true,
     this.isSubmitting = false,
+    this.image,
   });
 
   final double? lat;
@@ -24,6 +30,9 @@ class PinComposeState {
   final String body;
   final bool isLocating;
   final bool isSubmitting;
+
+  /// 添付する画像（未選択なら null）。
+  final PickedImage? image;
 
   static const maxBody = 200;
 
@@ -47,6 +56,7 @@ class PinComposeState {
     String? body,
     bool? isLocating,
     bool? isSubmitting,
+    Object? image = _imageSentinel,
   }) =>
       PinComposeState(
         lat: lat ?? this.lat,
@@ -55,6 +65,9 @@ class PinComposeState {
         body: body ?? this.body,
         isLocating: isLocating ?? this.isLocating,
         isSubmitting: isSubmitting ?? this.isSubmitting,
+        image: identical(image, _imageSentinel)
+            ? this.image
+            : image as PickedImage?,
       );
 }
 
@@ -121,14 +134,32 @@ class PinComposeController extends Notifier<PinComposeState> {
 
   void updateBody(String body) => state = state.copyWith(body: body);
 
+  /// 画像を選ぶ（キャンセル時は変更なし）。
+  Future<void> pickImage() async {
+    final picked = await ref.read(imagePickerServiceProvider).pick();
+    if (picked != null) state = state.copyWith(image: picked);
+  }
+
+  /// 選択した画像を取り消す。
+  void clearImage() => state = state.copyWith(image: null);
+
   Future<PinComposeResult> submit() async {
     if (!state.canSubmit) return PinComposeResult.invalid;
     state = state.copyWith(isSubmitting: true);
     try {
+      // 画像があれば先に R2 へアップロードして URL を得る。
+      String? imageUrl;
+      final img = state.image;
+      if (img != null) {
+        imageUrl = await ref
+            .read(imageUploadRepositoryProvider)
+            .uploadPinImage(img.bytes, img.contentType);
+      }
       await ref.read(pinRepositoryProvider).create(
             body: state.body.trim(),
             lat: state.lat!,
             lng: state.lng!,
+            imageUrl: imageUrl,
           );
       state = state.copyWith(isSubmitting: false);
       return PinComposeResult.success;

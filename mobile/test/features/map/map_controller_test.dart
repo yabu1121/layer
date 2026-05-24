@@ -28,6 +28,7 @@ class _FakePinRepository implements PinRepository {
     required String body,
     required double lat,
     required double lng,
+    String? imageUrl,
   }) async =>
       throw UnimplementedError();
 }
