@@ -237,7 +237,7 @@ class _MapScreenState extends ConsumerState<MapScreen>
 }
 
 /// 起動時の「お知らせ」バナー（issue #44）。
-class _NotificationBanner extends StatelessWidget {
+class _NotificationBanner extends StatefulWidget {
   const _NotificationBanner({
     required this.notification,
     required this.onTap,
@@ -249,28 +249,69 @@ class _NotificationBanner extends StatelessWidget {
   final VoidCallback onClose;
 
   @override
+  State<_NotificationBanner> createState() => _NotificationBannerState();
+}
+
+class _NotificationBannerState extends State<_NotificationBanner>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 350),
+  )..forward();
+  late final Animation<Offset> _slide = Tween<Offset>(
+    begin: const Offset(0, -1),
+    end: Offset.zero,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutCubic));
+  late final Animation<double> _fade =
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    return Material(
-      color: theme.colorScheme.primaryContainer,
-      child: InkWell(
-        onTap: onTap,
-        child: SafeArea(
-          bottom: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
-            child: Row(
-              children: [
-                Text(notification.kindEmoji,
-                    style: const TextStyle(fontSize: 20)),
-                const SizedBox(width: 8),
-                Expanded(child: Text(notification.summary)),
-                IconButton(
-                  icon: const Icon(Icons.close),
-                  tooltip: '閉じる',
-                  onPressed: onClose,
+    final n = widget.notification;
+    final isDiscovery = n.kind == 'discovery';
+    return SlideTransition(
+      position: _slide,
+      child: FadeTransition(
+        opacity: _fade,
+        child: Material(
+          color: theme.colorScheme.primaryContainer,
+          child: InkWell(
+            onTap: widget.onTap,
+            child: SafeArea(
+              bottom: false,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 4, 8),
+                child: Row(
+                  children: [
+                    // 発見はコア体験なので、絵文字を弾ませて目立たせる。
+                    isDiscovery
+                        ? TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.6, end: 1.0),
+                            duration: const Duration(milliseconds: 450),
+                            curve: Curves.elasticOut,
+                            builder: (context, scale, child) =>
+                                Transform.scale(scale: scale, child: child),
+                            child: Text(n.kindEmoji,
+                                style: const TextStyle(fontSize: 22)),
+                          )
+                        : Text(n.kindEmoji, style: const TextStyle(fontSize: 20)),
+                    const SizedBox(width: 8),
+                    Expanded(child: Text(n.summary)),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      tooltip: '閉じる',
+                      onPressed: widget.onClose,
+                    ),
+                  ],
                 ),
-              ],
+              ),
             ),
           ),
         ),
