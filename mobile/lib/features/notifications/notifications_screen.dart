@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/widgets/error_view.dart';
 import 'app_notification.dart';
 import 'notifications_controller.dart';
 
@@ -50,19 +51,10 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
       body: switch (state.status) {
         NotificationsStatus.loading =>
           const Center(child: CircularProgressIndicator()),
-        NotificationsStatus.error => Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Text('読み込みに失敗しました'),
-                const SizedBox(height: 12),
-                FilledButton(
-                  onPressed: () =>
-                      ref.read(notificationsControllerProvider.notifier).load(),
-                  child: const Text('再試行'),
-                ),
-              ],
-            ),
+        NotificationsStatus.error => ErrorView(
+            message: '読み込みに失敗しました',
+            onRetry: () =>
+                ref.read(notificationsControllerProvider.notifier).load(),
           ),
         NotificationsStatus.ready => state.items.isEmpty
             ? const Center(child: Text('まだお知らせはありません'))
