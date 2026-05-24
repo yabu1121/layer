@@ -76,6 +76,7 @@ create table pins (
   id         uuid primary key default gen_random_uuid(),
   user_id    uuid not null references users(id),
   body       text not null,                              -- 200 文字制限はクライアント側
+  image_url  text,                                       -- 任意。R2 上の画像 URL（US-B3）
   location   geography(point, 4326) not null,            -- 緯度経度
   created_at timestamptz not null default now()
 );
@@ -84,8 +85,9 @@ create index on pins (user_id);
 create index on pins using gist (location);              -- 地理空間インデックス
 ```
 
-> **将来拡張の予約（要件 §9）**: 感情ラベル（US-B4）や写真添付（US-B3）は MVP 対象外のためカラムを持たない。
-> 導入時は `emotion text` / `image_url text` を追加する想定。
+> `image_url` は写真添付（US-B3）用。nullable のため AutoMigrate で追加する
+> （`location` のみ PostGIS のため SQL マイグレーション管理）。感情ラベル（US-B4）は
+> 未実装で、導入時は `emotion text` を追加する想定。
 
 ### reactions
 
