@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/models/comment.dart';
 import '../../core/models/pin.dart';
 import '../map/map_controller.dart';
 import 'pin_detail_controller.dart';
@@ -245,7 +246,170 @@ class _SheetContent extends StatelessWidget {
               onTap: () => onSelectPin(pin.id),
             ),
         ],
+        const Divider(height: 32),
+        const _CommentSection(),
       ],
+    );
+  }
+}
+
+/// メイン Pin のコメント一覧と投稿欄。自分のコメントは削除できる（US-C3）。
+class _CommentSection extends ConsumerStatefulWidget {
+  const _CommentSection();
+
+  @override
+  ConsumerState<_CommentSection> createState() => _CommentSectionState();
+}
+
+class _CommentSectionState extends ConsumerState<_CommentSection> {
+  final _controller = TextEditingController();
+  bool _sending = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final text = _controller.text.trim();
+    if (text.isEmpty || _sending) return;
+    setState(() => _sending = true);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok =
+        await ref.read(pinDetailControllerProvider.notifier).addComment(text);
+    if (!mounted) return;
+    setState(() => _sending = false);
+    if (ok) {
+      _controller.clear();
+    } else {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('コメントを送信できませんでした')));
+    }
+  }
+
+  Future<void> _delete(String commentId) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await ref
+        .read(pinDetailControllerProvider.notifier)
+        .deleteComment(commentId);
+    if (!mounted || ok) return;
+    messenger
+      ..hideCurrentSnackBar()
+      ..showSnackBar(const SnackBar(content: Text('コメントを削除できませんでした')));
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final notifier = ref.read(pinDetailControllerProvider.notifier);
+    final comments =
+        ref.watch(pinDetailControllerProvider.select((s) => s.comments));
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text('コメント ${comments.length}', style: theme.textTheme.labelLarge),
+        const SizedBox(height: 8),
+        if (comments.isEmpty)
+          Text('まだコメントはありません', style: theme.textTheme.bodySmall)
+        else
+          for (final c in comments)
+            _CommentTile(
+              comment: c,
+              canDelete: notifier.canDeleteComment(c),
+              onDelete: () => _delete(c.id),
+            ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                maxLength: 200,
+                minLines: 1,
+                maxLines: 3,
+                textInputAction: TextInputAction.send,
+                onSubmitted: (_) => _send(),
+                decoration: const InputDecoration(
+                  hintText: 'コメントを書く…',
+                  counterText: '',
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton.filled(
+              onPressed: _sending ? null : _send,
+              tooltip: '送信',
+              icon: _sending
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+}
+
+class _CommentTile extends StatelessWidget {
+  const _CommentTile({
+    required this.comment,
+    required this.canDelete,
+    required this.onDelete,
+  });
+
+  final Comment comment;
+  final bool canDelete;
+  final VoidCallback onDelete;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(comment.author.icon, style: const TextStyle(fontSize: 18)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Flexible(
+                      child: Text(
+                        comment.author.displayName,
+                        style: theme.textTheme.titleSmall,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const SizedBox(width: 6),
+                    Text(_timeAgo(comment.createdAt),
+                        style: theme.textTheme.bodySmall),
+                  ],
+                ),
+                Text(comment.body),
+              ],
+            ),
+          ),
+          if (canDelete)
+            IconButton(
+              icon: const Icon(Icons.delete_outline, size: 18),
+              tooltip: '削除',
+              visualDensity: VisualDensity.compact,
+              onPressed: onDelete,
+            ),
+        ],
+      ),
     );
   }
 }

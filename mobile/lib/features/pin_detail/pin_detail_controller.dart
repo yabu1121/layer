@@ -2,8 +2,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/auth/current_user.dart';
 import '../../core/location/geocoding_service.dart';
+import '../../core/models/comment.dart';
 import '../../core/models/pin.dart';
 import '../map/pin_repository.dart';
+import 'comment_repository.dart';
 import 'reaction_repository.dart';
 
 enum PinDetailStatus { loading, ready, error }
@@ -15,6 +17,7 @@ class PinDetailState {
     this.nearby = const [],
     this.locationLabel,
     this.reactors = const [],
+    this.comments = const [],
     this.myAuthor,
   });
 
@@ -25,6 +28,9 @@ class PinDetailState {
 
   /// メイン Pin の共感者（自分を含む場合あり）。
   final List<PinAuthor> reactors;
+
+  /// メイン Pin のコメント（古い順）。
+  final List<Comment> comments;
 
   /// 自分の公開プロフィール（楽観的更新で reactors に差し込む / 自分判定に使う）。
   final PinAuthor? myAuthor;
@@ -40,6 +46,7 @@ class PinDetailState {
     List<Pin>? nearby,
     String? locationLabel,
     List<PinAuthor>? reactors,
+    List<Comment>? comments,
     PinAuthor? myAuthor,
   }) =>
       PinDetailState(
@@ -48,6 +55,7 @@ class PinDetailState {
         nearby: nearby ?? this.nearby,
         locationLabel: locationLabel ?? this.locationLabel,
         reactors: reactors ?? this.reactors,
+        comments: comments ?? this.comments,
         myAuthor: myAuthor ?? this.myAuthor,
       );
 }
@@ -77,6 +85,10 @@ class PinDetailController extends Notifier<PinDetailState> {
       try {
         reactors = await ref.read(reactionRepositoryProvider).list(pinId);
       } catch (_) {}
+      var comments = <Comment>[];
+      try {
+        comments = await ref.read(commentRepositoryProvider).list(pinId);
+      } catch (_) {}
       PinAuthor? me;
       try {
         final user = await ref.read(currentUserProvider.future);
@@ -94,6 +106,7 @@ class PinDetailController extends Notifier<PinDetailState> {
         nearby: nearby,
         locationLabel: label,
         reactors: reactors,
+        comments: comments,
         myAuthor: me,
       );
     } catch (_) {
@@ -149,6 +162,44 @@ class PinDetailController extends Notifier<PinDetailState> {
       state = state.copyWith(reactors: previous); // ロールバック
       return false;
     }
+  }
+
+  /// コメントを投稿する。成功で末尾に追加し true。空文字や失敗で false。
+  Future<bool> addComment(String body) async {
+    final text = body.trim();
+    final pin = state.mainPin;
+    if (text.isEmpty || pin == null) return false;
+    try {
+      final created =
+          await ref.read(commentRepositoryProvider).create(pin.id, text);
+      state = state.copyWith(comments: [...state.comments, created]);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// 自分のコメントを削除する。楽観的に除き、API 失敗で巻き戻す。
+  Future<bool> deleteComment(String commentId) async {
+    final pin = state.mainPin;
+    if (pin == null) return false;
+    final previous = state.comments;
+    state = state.copyWith(
+      comments: previous.where((c) => c.id != commentId).toList(),
+    );
+    try {
+      await ref.read(commentRepositoryProvider).delete(pin.id, commentId);
+      return true;
+    } catch (_) {
+      state = state.copyWith(comments: previous); // ロールバック
+      return false;
+    }
+  }
+
+  /// 自分のコメントか（削除可否）。
+  bool canDeleteComment(Comment c) {
+    final me = state.myAuthor;
+    return me != null && c.isMine(me.id);
   }
 }
 

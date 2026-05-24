@@ -2,9 +2,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:layer/core/auth/current_user.dart';
 import 'package:layer/core/location/geocoding_service.dart';
+import 'package:layer/core/models/comment.dart';
 import 'package:layer/core/models/pin.dart';
 import 'package:layer/core/models/user.dart';
 import 'package:layer/features/map/pin_repository.dart';
+import 'package:layer/features/pin_detail/comment_repository.dart';
 import 'package:layer/features/pin_detail/pin_detail_controller.dart';
 import 'package:layer/features/pin_detail/reaction_repository.dart';
 
@@ -83,11 +85,49 @@ class _FakeReactionRepo implements ReactionRepository {
   }
 }
 
+class _FakeCommentRepo implements CommentRepository {
+  _FakeCommentRepo({List<Comment>? initial}) : items = [...?initial];
+
+  List<Comment> items;
+  bool throwIt = false;
+  int seq = 0;
+
+  @override
+  Future<List<Comment>> list(String pinId) async => List.of(items);
+
+  @override
+  Future<Comment> create(String pinId, String body) async {
+    if (throwIt) throw Exception('boom');
+    final c = Comment(
+      id: 'c${seq++}',
+      body: body,
+      createdAt: DateTime(2026, 1, 2),
+      author: _author('me-id', '😀'),
+    );
+    items = [...items, c];
+    return c;
+  }
+
+  @override
+  Future<void> delete(String pinId, String commentId) async {
+    if (throwIt) throw Exception('boom');
+    items = items.where((c) => c.id != commentId).toList();
+  }
+}
+
+Comment _comment(String id, String body, String authorId) => Comment(
+      id: id,
+      body: body,
+      createdAt: DateTime(2026, 1, 2),
+      author: _author(authorId, '🌸'),
+    );
+
 const _me = User(id: 'me-id', userId: 'me', displayName: 'Me', icon: '😀');
 
 ProviderContainer _container(
   _FakePinRepo repo, {
   _FakeReactionRepo? reactions,
+  _FakeCommentRepo? comments,
 }) {
   final c = ProviderContainer(
     overrides: [
@@ -95,6 +135,8 @@ ProviderContainer _container(
       geocodingServiceProvider.overrideWithValue(_FakeGeocoding()),
       reactionRepositoryProvider
           .overrideWithValue(reactions ?? _FakeReactionRepo()),
+      commentRepositoryProvider
+          .overrideWithValue(comments ?? _FakeCommentRepo()),
       currentUserProvider.overrideWith((ref) async => _me),
     ],
   );
@@ -195,5 +237,58 @@ void main() {
     // ロールバックで元の 0 件に戻る。
     expect(c.read(pinDetailControllerProvider).reactionCount, 0);
     expect(c.read(pinDetailControllerProvider).reactedByMe, isFalse);
+  });
+
+  test('load: コメントを取得する', () async {
+    final comments = _FakeCommentRepo(initial: [_comment('c1', 'やあ', 'x')]);
+    final c = _container(_FakePinRepo(), comments: comments);
+    await c.read(pinDetailControllerProvider.notifier).load('p1');
+    expect(c.read(pinDetailControllerProvider).comments.single.body, 'やあ');
+  });
+
+  test('addComment: 成功で末尾に追加', () async {
+    final c = _container(_FakePinRepo());
+    final n = c.read(pinDetailControllerProvider.notifier);
+    await n.load('p1');
+    final ok = await n.addComment('はじめまして');
+    expect(ok, isTrue);
+    expect(c.read(pinDetailControllerProvider).comments.single.body, 'はじめまして');
+  });
+
+  test('addComment: 空文字は送らず false', () async {
+    final c = _container(_FakePinRepo());
+    final n = c.read(pinDetailControllerProvider.notifier);
+    await n.load('p1');
+    expect(await n.addComment('   '), isFalse);
+    expect(c.read(pinDetailControllerProvider).comments, isEmpty);
+  });
+
+  test('deleteComment: 自分のを除く / canDeleteComment 判定', () async {
+    final mine = _comment('c1', 'mine', 'me-id');
+    final other = _comment('c2', 'other', 'x');
+    final comments = _FakeCommentRepo(initial: [mine, other]);
+    final c = _container(_FakePinRepo(), comments: comments);
+    final n = c.read(pinDetailControllerProvider.notifier);
+    await n.load('p1');
+    expect(n.canDeleteComment(mine), isTrue);
+    expect(n.canDeleteComment(other), isFalse);
+
+    final ok = await n.deleteComment('c1');
+    expect(ok, isTrue);
+    expect(
+      c.read(pinDetailControllerProvider).comments.map((e) => e.id).toList(),
+      ['c2'],
+    );
+  });
+
+  test('deleteComment: 失敗でロールバック', () async {
+    final comments = _FakeCommentRepo(initial: [_comment('c1', 'mine', 'me-id')])
+      ..throwIt = true;
+    final c = _container(_FakePinRepo(), comments: comments);
+    final n = c.read(pinDetailControllerProvider.notifier);
+    await n.load('p1');
+    final ok = await n.deleteComment('c1');
+    expect(ok, isFalse);
+    expect(c.read(pinDetailControllerProvider).comments.length, 1); // 巻き戻し
   });
 }
