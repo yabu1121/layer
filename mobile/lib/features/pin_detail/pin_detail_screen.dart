@@ -486,7 +486,7 @@ class _PinCard extends StatelessWidget {
 }
 
 /// 「わかる」ボタン + 共感者アイコン（最大 5 + 残数）。
-class _ReactionBar extends StatelessWidget {
+class _ReactionBar extends StatefulWidget {
   const _ReactionBar({
     required this.reactors,
     required this.reactedByMe,
@@ -498,23 +498,60 @@ class _ReactionBar extends StatelessWidget {
   final VoidCallback? onToggle;
 
   @override
+  State<_ReactionBar> createState() => _ReactionBarState();
+}
+
+class _ReactionBarState extends State<_ReactionBar>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 280),
+  );
+  // タップ時に 1.0 → 1.3 → 1.0 と弾むスケール。
+  late final Animation<double> _pop = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(begin: 1.0, end: 1.3).chain(CurveTween(curve: Curves.easeOut)),
+      weight: 50,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: 1.3, end: 1.0).chain(CurveTween(curve: Curves.easeIn)),
+      weight: 50,
+    ),
+  ]).animate(_controller);
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onTap() {
+    if (widget.onToggle == null) return;
+    _controller.forward(from: 0); // ポップ演出
+    widget.onToggle!();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    final count = reactors.length;
-    final shown = reactors.take(5).toList();
+    final count = widget.reactors.length;
+    final shown = widget.reactors.take(5).toList();
     final extra = count - shown.length;
     return Row(
       children: [
-        reactedByMe
-            ? FilledButton.icon(
-                onPressed: onToggle,
-                icon: const Icon(Icons.check, size: 18),
-                label: Text('わかる済み $count'),
-              )
-            : OutlinedButton.icon(
-                onPressed: onToggle,
-                icon: const Text('💛'),
-                label: Text('わかる $count'),
-              ),
+        ScaleTransition(
+          scale: _pop,
+          child: widget.reactedByMe
+              ? FilledButton.icon(
+                  onPressed: _onTap,
+                  icon: const Icon(Icons.check, size: 18),
+                  label: Text('わかる済み $count'),
+                )
+              : OutlinedButton.icon(
+                  onPressed: _onTap,
+                  icon: const Text('💛'),
+                  label: Text('わかる $count'),
+                ),
+        ),
         const SizedBox(width: 8),
         for (final r in shown)
           Padding(
