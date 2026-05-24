@@ -20,6 +20,7 @@ func Migrate(db *gorm.DB) error {
 		&model.Friendship{},
 		&model.Pin{},
 		&model.Reaction{},
+		&model.Comment{},
 		&model.PinDiscovery{},
 		&model.Notification{},
 	)

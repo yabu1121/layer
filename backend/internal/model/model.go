@@ -53,12 +53,21 @@ type Reaction struct {
 	CreatedAt time.Time `json:"createdAt"`
 }
 
+// Comment は Pin へのコメント（US-C3）。本文は最大 200 文字（handler で検証）。
+type Comment struct {
+	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
+	PinID     string    `gorm:"type:uuid;not null;index" json:"pinId"`
+	UserID    string    `gorm:"type:uuid;not null;index" json:"userId"`
+	Body      string    `gorm:"not null" json:"body"`
+	CreatedAt time.Time `json:"createdAt"`
+}
+
 // PinDiscovery は発見ログ。
 type PinDiscovery struct {
 	ID          string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
-	UserID      string    `gorm:"type:uuid;not null;index" json:"userId"`       // 発見した側
-	PinID       string    `gorm:"type:uuid;not null" json:"pinId"`              // 発見された Pin
-	TriggeredBy string    `gorm:"type:uuid;not null" json:"triggeredBy"`        // きっかけの Pin
+	UserID      string    `gorm:"type:uuid;not null;index" json:"userId"` // 発見した側
+	PinID       string    `gorm:"type:uuid;not null" json:"pinId"`        // 発見された Pin
+	TriggeredBy string    `gorm:"type:uuid;not null" json:"triggeredBy"`  // きっかけの Pin
 	CreatedAt   time.Time `json:"createdAt"`
 }
 
@@ -66,7 +75,7 @@ type PinDiscovery struct {
 type Notification struct {
 	ID        string     `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID    string     `gorm:"type:uuid;not null;index" json:"userId"`
-	Kind      string     `gorm:"not null" json:"kind"` // friend_request | friend_accepted | reaction | discovery
+	Kind      string     `gorm:"not null" json:"kind"` // friend_request | friend_accepted | reaction | comment | discovery
 	Payload   string     `gorm:"type:jsonb;not null" json:"payload"`
 	ReadAt    *time.Time `json:"readAt,omitempty"`
 	CreatedAt time.Time  `json:"createdAt"`

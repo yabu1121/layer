@@ -95,6 +95,24 @@ create index on reactions (pin_id);
 create index on reactions (user_id);
 ```
 
+### comments
+
+```sql
+create table comments (
+  id         uuid primary key default gen_random_uuid(),
+  pin_id     uuid not null references pins(id) on delete cascade,
+  user_id    uuid not null references users(id),
+  body       text not null,                  -- 最大 200 文字（API で検証）
+  created_at timestamptz not null default now()
+);
+
+create index on comments (pin_id);
+create index on comments (user_id);
+```
+
+> US-C3。可視性は対象 Pin に準じる（友達限定。`PINS_PUBLIC` で公開）。`pin_id` は
+> `on delete cascade`（Pin 削除でコメントも消える）。FK は migration `006_comment_foreign_keys.sql`。
+
 ### pin_discoveries（発見ログ）
 
 ```sql
@@ -120,6 +138,7 @@ create table notifications (
                'friend_request',
                'friend_accepted',
                'reaction',
+               'comment',
                'discovery'
              )),
   payload    jsonb not null,

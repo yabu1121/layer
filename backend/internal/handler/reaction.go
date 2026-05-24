@@ -36,10 +36,11 @@ type reactionsResponse struct {
 	Reactions []reactionItem `json:"reactions"`
 }
 
-// authorizePin は :id の Pin の owner を返す。Pin が無ければ 404、
-// 自分の Pin でも友達の Pin でもなければ 403（require.md §6.2）。
-func (h *ReactionHandler) authorizePin(c echo.Context, me *model.User) (ownerID string, err error) {
-	if err := h.db.Raw(`select user_id from pins where id = ?`, c.Param("id")).Scan(&ownerID).Error; err != nil {
+// authorizePinView は :id の Pin の owner を返す。Pin が無ければ 404、
+// 自分の Pin でも友達の Pin でもなければ 403（require.md §6.2）。公開モード
+// （PINS_PUBLIC）では誰でも可。reaction / comment が共通で使う可視性判定。
+func authorizePinView(db *gorm.DB, c echo.Context, me *model.User) (ownerID string, err error) {
+	if err := db.Raw(`select user_id from pins where id = ?`, c.Param("id")).Scan(&ownerID).Error; err != nil {
 		return "", echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	if ownerID == "" {
@@ -47,7 +48,7 @@ func (h *ReactionHandler) authorizePin(c echo.Context, me *model.User) (ownerID 
 	}
 	// 既定（友達限定）では自分か友達の Pin のみ。公開モードでは誰でも可。
 	if !pinsPublic() && ownerID != me.ID {
-		friends, ferr := access.IsFriend(h.db, me.ID, ownerID)
+		friends, ferr := access.IsFriend(db, me.ID, ownerID)
 		if ferr != nil {
 			return "", echo.NewHTTPError(http.StatusInternalServerError, ferr.Error())
 		}
@@ -56,6 +57,11 @@ func (h *ReactionHandler) authorizePin(c echo.Context, me *model.User) (ownerID 
 		}
 	}
 	return ownerID, nil
+}
+
+// authorizePin は authorizePinView の薄いラッパ（既存呼び出し互換）。
+func (h *ReactionHandler) authorizePin(c echo.Context, me *model.User) (string, error) {
+	return authorizePinView(h.db, c, me)
 }
 
 // Create は対象 Pin に「わかる」を付ける（FR-5.3 / US-C2）。
