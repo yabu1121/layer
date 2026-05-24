@@ -7,10 +7,10 @@ import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/pin_compose/pin_compose_screen.dart';
 import '../features/pin_detail/pin_detail_screen.dart';
+import '../features/profile/profile_screen.dart';
 import '../features/signin/signin_screen.dart';
 import '../features/splash/splash_screen.dart';
 import 'main_shell.dart';
-import 'placeholder_screen.dart';
 
 /// アプリ全体のルーティング定義。
 ///
@@ -73,8 +73,7 @@ final routerProvider = Provider<GoRouter>((ref) {
             routes: [
               GoRoute(
                 path: '/profile',
-                builder: (context, state) =>
-                    const PlaceholderScreen('Profile'),
+                builder: (context, state) => const ProfileScreen(),
               ),
             ],
           ),
