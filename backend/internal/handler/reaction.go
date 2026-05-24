@@ -46,6 +46,16 @@ func authorizePinView(db *gorm.DB, c echo.Context, me *model.User) (ownerID stri
 	if ownerID == "" {
 		return "", echo.NewHTTPError(http.StatusNotFound, "pin not found")
 	}
+	// ブロック関係があれば公開モードでも不可。
+	if ownerID != me.ID {
+		blocked, berr := access.IsBlocked(db, me.ID, ownerID)
+		if berr != nil {
+			return "", echo.NewHTTPError(http.StatusInternalServerError, berr.Error())
+		}
+		if blocked {
+			return "", echo.NewHTTPError(http.StatusForbidden, "not allowed")
+		}
+	}
 	// 既定（友達限定）では自分か友達の Pin のみ。公開モードでは誰でも可。
 	if !pinsPublic() && ownerID != me.ID {
 		friends, ferr := access.IsFriend(db, me.ID, ownerID)
