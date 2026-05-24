@@ -41,6 +41,7 @@ type Pin struct {
 	ID        string    `gorm:"type:uuid;primaryKey;default:gen_random_uuid()" json:"id"`
 	UserID    string    `gorm:"type:uuid;not null;index" json:"userId"`
 	Body      string    `gorm:"not null" json:"body"`
+	ImageURL  *string   `json:"imageUrl,omitempty"` // 任意。R2 上の画像 URL（US-B3）
 	CreatedAt time.Time `json:"createdAt"`
 }
 
