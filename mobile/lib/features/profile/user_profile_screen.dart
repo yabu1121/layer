@@ -8,6 +8,7 @@ import '../../core/widgets/empty_view.dart';
 import '../../core/widgets/error_view.dart';
 import '../../core/widgets/loading_view.dart';
 import '../map/pin_repository.dart';
+import 'profile_header.dart';
 
 /// 指定ユーザーの投稿一覧（可視 Pin を著者で絞り込む）。
 final userPinsProvider =
@@ -34,13 +35,11 @@ class UserProfileScreen extends ConsumerWidget {
         children: [
           const SizedBox(height: 24),
           Center(
-            child: Column(
-              children: [
-                Text(user.icon, style: const TextStyle(fontSize: 56)),
-                const SizedBox(height: 8),
-                Text(user.displayName, style: theme.textTheme.titleLarge),
-                Text('@${user.userId}', style: theme.textTheme.bodyMedium),
-              ],
+            child: ProfileHeader(
+              icon: user.icon,
+              displayName: user.displayName,
+              userId: user.userId,
+              postCount: pins.valueOrNull?.length,
             ),
           ),
           const Divider(height: 32),
