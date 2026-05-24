@@ -189,3 +189,47 @@ where u.id <> ? and u.last_lat is not null and u.last_lng is not null`
 	}
 	return c.JSON(http.StatusOK, locationsResponse{Locations: locs})
 }
+
+// Delete は自分のアカウントと関連レコードを全削除する（require.md §9.3。
+// App Store のアカウント削除要件）。FK 順序に注意してトランザクションで消す。
+func (h *MeHandler) Delete(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+	id := me.ID
+	err := h.db.Transaction(func(tx *gorm.DB) error {
+		// 自分が他人の Pin に付けた反応・コメント（pin 経由の cascade では消えない）。
+		if err := tx.Exec(`delete from reactions where user_id = ?`, id).Error; err != nil {
+			return err
+		}
+		if err := tx.Exec(`delete from comments where user_id = ?`, id).Error; err != nil {
+			return err
+		}
+		// 発見ログ（自分が発見した / 自分の Pin が絡むもの）。FK cascade なしのため先に消す。
+		if err := tx.Exec(`delete from pin_discoveries
+			where user_id = ?
+			   or pin_id in (select id from pins where user_id = ?)
+			   or triggered_by in (select id from pins where user_id = ?)`, id, id, id).Error; err != nil {
+			return err
+		}
+		// 友達関係（双方向）。
+		if err := tx.Exec(`delete from friendships where requester_id = ? or receiver_id = ?`, id, id).Error; err != nil {
+			return err
+		}
+		// 自分宛の通知。
+		if err := tx.Exec(`delete from notifications where user_id = ?`, id).Error; err != nil {
+			return err
+		}
+		// 自分の Pin（その Pin への reactions / comments は FK cascade で消える）。
+		if err := tx.Exec(`delete from pins where user_id = ?`, id).Error; err != nil {
+			return err
+		}
+		// 最後に本人。
+		return tx.Exec(`delete from users where id = ?`, id).Error
+	})
+	if err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.NoContent(http.StatusNoContent)
+}
