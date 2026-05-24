@@ -458,6 +458,10 @@ class _PinCard extends StatelessWidget {
               ),
               Text('@${pin.author.userId}', style: theme.textTheme.bodySmall),
               const SizedBox(height: 8),
+              if (pin.imageUrl != null) ...[
+                _PinImage(url: pin.imageUrl!),
+                const SizedBox(height: 8),
+              ],
               Text(pin.body),
               const SizedBox(height: 8),
               if (reactors != null)
@@ -520,6 +524,42 @@ class _ReactionBar extends StatelessWidget {
         if (extra > 0)
           Text('+$extra', style: Theme.of(context).textTheme.bodySmall),
       ],
+    );
+  }
+}
+
+/// Pin の添付画像（US-B3）。読み込み中はインジケータ、失敗時はアイコン。
+class _PinImage extends StatelessWidget {
+  const _PinImage({required this.url});
+
+  final String url;
+
+  @override
+  Widget build(BuildContext context) {
+    final fallback = Theme.of(context).colorScheme.surfaceContainerHighest;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: Image.network(
+        url,
+        width: double.infinity,
+        height: 180,
+        fit: BoxFit.cover,
+        loadingBuilder: (context, child, progress) {
+          if (progress == null) return child;
+          return Container(
+            height: 180,
+            alignment: Alignment.center,
+            color: fallback,
+            child: const CircularProgressIndicator(),
+          );
+        },
+        errorBuilder: (context, error, stack) => Container(
+          height: 180,
+          alignment: Alignment.center,
+          color: fallback,
+          child: const Icon(Icons.broken_image_outlined),
+        ),
+      ),
     );
   }
 }
