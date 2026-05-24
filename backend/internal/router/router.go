@@ -104,6 +104,7 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	api.POST("/auth/sign-out", auth.SignOut)
 	api.GET("/me", me.Get)
 	api.POST("/me/profile", me.UpdateProfile)
+	api.DELETE("/me", me.Delete)
 	api.POST("/me/location", me.UpdateLocation)
 	api.GET("/locations", me.ListOthersLocations)
 	api.GET("/users/search", user.Search)
