@@ -3,12 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../core/models/pin.dart';
+import '../core/models/user.dart';
 import '../features/friends/friends_screen.dart';
 import '../features/map/map_screen.dart';
 import '../features/notifications/notifications_screen.dart';
 import '../features/onboarding/onboarding_screen.dart';
 import '../features/pin_compose/pin_compose_screen.dart';
 import '../features/pin_detail/pin_detail_screen.dart';
+import '../features/profile/profile_edit_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/profile/user_profile_screen.dart';
 import '../features/signin/signin_screen.dart';
@@ -40,6 +42,19 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: '/friends',
         builder: (context, state) => const FriendsScreen(),
+      ),
+      // プロフィール編集（プロフィールから extra で User を渡して push）。
+      GoRoute(
+        path: '/profile/edit',
+        builder: (context, state) {
+          final user = state.extra as User?;
+          if (user == null) {
+            return const Scaffold(
+              body: Center(child: Text('プロフィール情報がありません')),
+            );
+          }
+          return ProfileEditScreen(user: user);
+        },
       ),
       // 他ユーザーのプロフィール（友達一覧などから extra で PinAuthor を渡す）。
       GoRoute(

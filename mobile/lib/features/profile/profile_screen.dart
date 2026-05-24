@@ -17,7 +17,21 @@ class ProfileScreen extends ConsumerWidget {
     final theme = Theme.of(context);
 
     return Scaffold(
-      appBar: AppBar(title: const Text('自分')),
+      appBar: AppBar(
+        title: const Text('自分'),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit),
+            tooltip: 'プロフィールを編集',
+            onPressed: () async {
+              final user = await ref.read(currentUserProvider.future);
+              if (context.mounted) {
+                context.push('/profile/edit', extra: user);
+              }
+            },
+          ),
+        ],
+      ),
       body: ListView(
         children: [
           const SizedBox(height: 24),
