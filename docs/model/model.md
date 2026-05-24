@@ -27,15 +27,23 @@ users        ─ 1:N ─ pins ─ 1:N ─ reactions
 
 ```sql
 create table users (
-  id            uuid primary key default gen_random_uuid(),
-  user_id       text unique not null,       -- 表示・検索用ハンドル
-  display_name  text not null,
-  icon          text,                        -- 絵文字 or 画像 URL
-  auth_provider text not null,               -- 'google'
-  auth_uid      text unique not null,        -- Google の sub
-  created_at    timestamptz not null default now()
+  id               uuid primary key default gen_random_uuid(),
+  user_id          text unique not null,    -- 表示・検索用ハンドル
+  display_name     text not null,
+  icon             text,                     -- 絵文字 or 画像 URL
+  auth_provider    text not null,            -- 'google'
+  auth_uid         text unique not null,     -- Google の sub
+  created_at       timestamptz not null default now(),
+  -- 現在地（点表示用）。未報告なら null。
+  last_lat         double precision,
+  last_lng         double precision,
+  last_location_at timestamptz
 );
 ```
+
+> `last_lat` / `last_lng` / `last_location_at` は地図上の現在地ドット表示用
+> （`POST /api/me/location` で更新、`GET /api/locations` で他ユーザー分を取得）。
+> nullable 列のため AutoMigrate で追加する。
 
 ### friendships
 

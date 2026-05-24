@@ -159,7 +159,8 @@ type locationsResponse struct {
 	Locations []userLocation `json:"locations"`
 }
 
-// ListOthersLocations は自分以外で位置を報告済みのユーザーの現在地を返す（点表示用）。
+// ListOthersLocations は accepted な友達で位置を報告済みのユーザーの現在地を返す
+// （点表示用）。require.md §6.2「友達以外への露出ゼロ」に従い友達限定。
 func (h *MeHandler) ListOthersLocations(c echo.Context) error {
 	me := authmw.CurrentUser(c)
 	if me == nil {
@@ -171,10 +172,15 @@ func (h *MeHandler) ListOthersLocations(c echo.Context) error {
 		Lng float64
 	}
 	var rows []row
-	const q = `select id, last_lat as lat, last_lng as lng
-from users
-where id <> ? and last_lat is not null and last_lng is not null`
-	if err := h.db.Raw(q, me.ID).Scan(&rows).Error; err != nil {
+	// accepted な友達（双方向）かつ位置報告済みのユーザーのみ。
+	const q = `select u.id as id, u.last_lat as lat, u.last_lng as lng
+from users u
+join friendships f
+  on f.status = 'accepted'
+ and ((f.requester_id = ? and f.receiver_id = u.id)
+   or (f.receiver_id = ? and f.requester_id = u.id))
+where u.id <> ? and u.last_lat is not null and u.last_lng is not null`
+	if err := h.db.Raw(q, me.ID, me.ID, me.ID).Scan(&rows).Error; err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 	locs := make([]userLocation, 0, len(rows))
