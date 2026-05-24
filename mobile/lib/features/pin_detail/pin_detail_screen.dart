@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/pin.dart';
+import '../map/map_controller.dart';
 import 'pin_detail_controller.dart';
 
 /// 場所の Pin 詳細（発見の核）。ボトムシートでメイン Pin と同じ場所の Pin を並べる。
@@ -36,9 +37,45 @@ class _PinDetailScreenState extends ConsumerState<PinDetailScreen> {
     }
   }
 
+  Future<void> _deleteMain() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('この投稿を削除しますか？'),
+        content: const Text('削除すると元に戻せません。'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('キャンセル'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('削除'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final navigator = Navigator.of(context);
+    final messenger = ScaffoldMessenger.of(context);
+    final ok = await ref.read(pinDetailControllerProvider.notifier).deleteMain();
+    if (!mounted) return;
+    if (ok) {
+      await ref.read(mapControllerProvider.notifier).refreshPins();
+      navigator.maybePop();
+    } else {
+      messenger
+        ..hideCurrentSnackBar()
+        ..showSnackBar(const SnackBar(content: Text('削除に失敗しました')));
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final state = ref.watch(pinDetailControllerProvider);
+    final canDelete = state.mainPin != null &&
+        state.myAuthor != null &&
+        state.mainPin!.isMine(state.myAuthor!.id);
 
     return Scaffold(
       backgroundColor: Colors.black54, // 背後の地図を暗くするスクリム
@@ -61,6 +98,9 @@ class _PinDetailScreenState extends ConsumerState<PinDetailScreen> {
                 child: _SheetContent(
                   state: state,
                   scrollController: scrollController,
+                  onClose: () => Navigator.of(context).maybePop(),
+                  canDelete: canDelete,
+                  onDelete: _deleteMain,
                   onSelectPin: (id) => ref
                       .read(pinDetailControllerProvider.notifier)
                       .selectPin(id),
@@ -82,6 +122,9 @@ class _SheetContent extends StatelessWidget {
   const _SheetContent({
     required this.state,
     required this.scrollController,
+    required this.onClose,
+    required this.canDelete,
+    required this.onDelete,
     required this.onSelectPin,
     required this.onToggleReaction,
     required this.onRetry,
@@ -89,6 +132,9 @@ class _SheetContent extends StatelessWidget {
 
   final PinDetailState state;
   final ScrollController scrollController;
+  final VoidCallback onClose;
+  final bool canDelete;
+  final VoidCallback onDelete;
   final void Function(String pinId) onSelectPin;
   final VoidCallback onToggleReaction;
   final VoidCallback onRetry;
@@ -123,15 +169,40 @@ class _SheetContent extends StatelessWidget {
       controller: scrollController,
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
       children: [
-        Center(
-          child: Container(
-            width: 40,
-            height: 4,
-            margin: const EdgeInsets.only(bottom: 12),
-            decoration: BoxDecoration(
-              color: theme.dividerColor,
-              borderRadius: BorderRadius.circular(2),
-            ),
+        SizedBox(
+          height: 32,
+          child: Stack(
+            children: [
+              Center(
+                child: Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: theme.dividerColor,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              if (canDelete)
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: IconButton(
+                    icon: const Icon(Icons.delete_outline),
+                    tooltip: '削除',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: onDelete,
+                  ),
+                ),
+              Align(
+                alignment: Alignment.centerRight,
+                child: IconButton(
+                  icon: const Icon(Icons.close),
+                  tooltip: '閉じる',
+                  visualDensity: VisualDensity.compact,
+                  onPressed: onClose,
+                ),
+              ),
+            ],
           ),
         ),
         Row(

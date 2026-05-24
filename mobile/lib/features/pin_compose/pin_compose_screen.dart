@@ -98,24 +98,38 @@ class _PinComposeScreenState extends ConsumerState<PinComposeScreen> {
         children: [
           SizedBox(
             height: 220,
-            child: state.isLocating || !state.hasLocation
-                ? const Center(child: CircularProgressIndicator())
-                : GoogleMap(
-                    initialCameraPosition: CameraPosition(
-                      target: LatLng(state.lat!, state.lng!),
-                      zoom: 16,
-                    ),
-                    markers: {
-                      Marker(
-                        markerId: const MarkerId('compose'),
-                        position: LatLng(state.lat!, state.lng!),
-                        draggable: true,
-                        onDragEnd: (pos) =>
-                            notifier.updateLocation(pos.latitude, pos.longitude),
+            child: switch ((state.isLocating, state.hasLocation)) {
+              (true, _) => const Center(child: CircularProgressIndicator()),
+              (false, false) => Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('現在地を取得できませんでした'),
+                      const SizedBox(height: 8),
+                      FilledButton(
+                        onPressed: notifier.initialize,
+                        child: const Text('再試行'),
                       ),
-                    },
-                    myLocationEnabled: true,
+                    ],
                   ),
+                ),
+              (false, true) => GoogleMap(
+                  initialCameraPosition: CameraPosition(
+                    target: LatLng(state.lat!, state.lng!),
+                    zoom: 16,
+                  ),
+                  markers: {
+                    Marker(
+                      markerId: const MarkerId('compose'),
+                      position: LatLng(state.lat!, state.lng!),
+                      draggable: true,
+                      onDragEnd: (pos) =>
+                          notifier.updateLocation(pos.latitude, pos.longitude),
+                    ),
+                  },
+                  myLocationEnabled: true,
+                ),
+            },
           ),
           Padding(
             padding: const EdgeInsets.all(16),
