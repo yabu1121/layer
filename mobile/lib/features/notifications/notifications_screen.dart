@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/widgets/empty_view.dart';
 import '../../core/widgets/error_view.dart';
+import '../../core/widgets/loading_view.dart';
 import 'app_notification.dart';
 import 'notifications_controller.dart';
 
@@ -49,15 +51,17 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
     return Scaffold(
       appBar: AppBar(title: const Text('お知らせ')),
       body: switch (state.status) {
-        NotificationsStatus.loading =>
-          const Center(child: CircularProgressIndicator()),
+        NotificationsStatus.loading => const LoadingView(),
         NotificationsStatus.error => ErrorView(
             message: '読み込みに失敗しました',
             onRetry: () =>
                 ref.read(notificationsControllerProvider.notifier).load(),
           ),
         NotificationsStatus.ready => state.items.isEmpty
-            ? const Center(child: Text('まだお知らせはありません'))
+            ? const EmptyView(
+                message: 'まだお知らせはありません',
+                icon: Icons.notifications_none,
+              )
             : ListView.separated(
                 itemCount: state.items.length,
                 separatorBuilder: (_, __) => const Divider(height: 1),

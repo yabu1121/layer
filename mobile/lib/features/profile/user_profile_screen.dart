@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/api/api_error.dart';
 import '../../core/models/pin.dart';
+import '../../core/widgets/empty_view.dart';
 import '../../core/widgets/error_view.dart';
+import '../../core/widgets/loading_view.dart';
 import '../map/pin_repository.dart';
 
 /// 指定ユーザーの投稿一覧（可視 Pin を著者で絞り込む）。
@@ -50,7 +52,10 @@ class UserProfileScreen extends ConsumerWidget {
             data: (list) => list.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.all(24),
-                    child: Center(child: Text('まだ投稿はありません')),
+                    child: EmptyView(
+                      message: 'まだ投稿はありません',
+                      icon: Icons.place_outlined,
+                    ),
                   )
                 : Column(
                     children: [
@@ -64,7 +69,7 @@ class UserProfileScreen extends ConsumerWidget {
                   ),
             loading: () => const Padding(
               padding: EdgeInsets.all(24),
-              child: Center(child: CircularProgressIndicator()),
+              child: LoadingView(),
             ),
             error: (e, _) => Padding(
               padding: const EdgeInsets.all(24),
