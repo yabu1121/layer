@@ -21,3 +21,18 @@ func IsFriend(db *gorm.DB, viewerID, ownerID string) (bool, error) {
 	)`, viewerID, ownerID, ownerID, viewerID).Scan(&ok).Error
 	return ok, err
 }
+
+// IsBlocked は a と b の間にブロック関係（どちらの向きでも）があるかを判定する。
+// 片方向のブロックでも双方の可視性を遮断する（US-A7 / require.md §6.2）。
+func IsBlocked(db *gorm.DB, a, b string) (bool, error) {
+	if a == b {
+		return false, nil
+	}
+	var ok bool
+	err := db.Raw(`select exists (
+		select 1 from blocks
+		where (blocker_id = ? and blocked_id = ?)
+		   or (blocker_id = ? and blocked_id = ?)
+	)`, a, b, b, a).Scan(&ok).Error
+	return ok, err
+}

@@ -21,6 +21,7 @@ func Migrate(db *gorm.DB) error {
 		&model.Pin{},
 		&model.Reaction{},
 		&model.Comment{},
+		&model.Block{},
 		&model.PinDiscovery{},
 		&model.Notification{},
 	)
