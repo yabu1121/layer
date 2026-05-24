@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/comment.dart';
 import '../../core/models/pin.dart';
+import '../../core/widgets/empty_view.dart';
 import '../map/map_controller.dart';
 import 'pin_detail_controller.dart';
 
@@ -228,17 +229,16 @@ class _SheetContent extends StatelessWidget {
           onToggleReaction: onToggleReaction,
         ),
         if (state.nearby.isEmpty) ...[
-          const SizedBox(height: 24),
-          Center(
-            child: Text(
-              'ここではまだあなただけです',
-              style: theme.textTheme.bodyMedium,
-            ),
+          const SizedBox(height: 8),
+          const EmptyView(
+            message: 'ここではまだあなただけです',
+            hint: '同じ場所に友達の Pin が立つと、ここに並びます',
+            icon: Icons.place_outlined,
           ),
         ] else ...[
           const SizedBox(height: 16),
-          Text('── 同じ場所の Pin ──', style: theme.textTheme.labelLarge),
-          const SizedBox(height: 8),
+          Text('同じ場所の Pin', style: theme.textTheme.labelLarge),
+          const Divider(height: 16),
           for (final pin in state.nearby)
             _PinCard(
               pin: pin,

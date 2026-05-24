@@ -121,7 +121,7 @@ void main() {
 
     expect(find.text('新宿御苑'), findsOneWidget);
     expect(find.text('body-p1'), findsOneWidget); // メイン
-    expect(find.text('── 同じ場所の Pin ──'), findsOneWidget);
+    expect(find.text('同じ場所の Pin'), findsOneWidget);
     expect(find.textContaining('わかる'), findsWidgets); // ボタン表示
 
     // 近傍カードは下にあるためスクロールして確認する。
