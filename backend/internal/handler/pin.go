@@ -2,6 +2,7 @@ package handler
 
 import (
 	"net/http"
+	"os"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -11,6 +12,13 @@ import (
 	"github.com/labstack/echo/v4"
 	"gorm.io/gorm"
 )
+
+// pinsPublic は公開モード（友達でない人の Pin も閲覧可）か。
+// 既定は false（設計どおり友達限定）。PINS_PUBLIC=1/true で有効。
+func pinsPublic() bool {
+	v := os.Getenv("PINS_PUBLIC")
+	return v == "1" || v == "true"
+}
 
 // PinHandler は Pin 関連のエンドポイントを束ねる。
 type PinHandler struct {
@@ -171,7 +179,11 @@ func (h *PinHandler) ListVisible(c echo.Context) error {
 	}
 
 	var rows []pinRow
-	const q = `
+	var err error
+	// 友達限定の条件: 明示的に scope=friends か、公開モードが無効なとき。
+	// 公開モード(PINS_PUBLIC)かつ scope!=friends のときだけ全ユーザーを返す。
+	if c.QueryParam("scope") == "friends" || !pinsPublic() {
+		const q = `
 with my_friends as (
   select case when requester_id = ? then receiver_id else requester_id end as friend_id
   from friendships
@@ -182,7 +194,15 @@ from pins p
 join users u on u.id = p.user_id
 where p.user_id = ? or p.user_id in (select friend_id from my_friends)
 order by p.created_at desc`
-	if err := h.db.Raw(q, me.ID, me.ID, me.ID, me.ID).Scan(&rows).Error; err != nil {
+		err = h.db.Raw(q, me.ID, me.ID, me.ID, me.ID).Scan(&rows).Error
+	} else {
+		const q = `select ` + pinWithAuthorColumns + `
+from pins p
+join users u on u.id = p.user_id
+order by p.created_at desc`
+		err = h.db.Raw(q).Scan(&rows).Error
+	}
+	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -191,6 +211,38 @@ order by p.created_at desc`
 		pins = append(pins, r.toCreatedPin())
 	}
 	return c.JSON(http.StatusOK, visiblePinsResponse{Pins: pins})
+}
+
+// Delete は自分の Pin を削除する（owner のみ）。
+// pin_discoveries は FK が NO ACTION のため先に消す。reactions は CASCADE。
+func (h *PinHandler) Delete(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+	id := c.Param("id")
+	var ownerID string
+	if err := h.db.Raw(`select user_id from pins where id = ?`, id).Scan(&ownerID).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	if ownerID == "" {
+		return echo.NewHTTPError(http.StatusNotFound, "pin not found")
+	}
+	if ownerID != me.ID {
+		return echo.NewHTTPError(http.StatusForbidden, "not allowed")
+	}
+	txErr := h.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Exec(
+			`delete from pin_discoveries where pin_id = ? or triggered_by = ?`, id, id,
+		).Error; err != nil {
+			return err
+		}
+		return tx.Exec(`delete from pins where id = ?`, id).Error
+	})
+	if txErr != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, txErr.Error())
+	}
+	return c.NoContent(http.StatusNoContent)
 }
 
 // Get は Pin 詳細を返す（FR-5.1）。自分の Pin か IsFriend でなければ 403、無ければ 404。
@@ -210,7 +262,8 @@ where p.id = ?`
 	if r.ID == "" {
 		return echo.NewHTTPError(http.StatusNotFound, "pin not found")
 	}
-	if r.UserID != me.ID {
+	// 既定（友達限定）では自分か友達のみ。公開モードでは誰でも閲覧可。
+	if !pinsPublic() && r.UserID != me.ID {
 		friends, err := access.IsFriend(h.db, me.ID, r.UserID)
 		if err != nil {
 			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -240,7 +293,19 @@ func (h *PinHandler) Nearby(c echo.Context) error {
 	}
 
 	var rows []pinRow
-	const q = `
+	var err error
+	if pinsPublic() {
+		// 公開モード: 同じ場所の全ユーザーの Pin。
+		const q = `select ` + pinWithAuthorColumns + `
+from pins p
+join users u on u.id = p.user_id
+where p.id <> ?
+  and ST_DWithin(p.location, (select location from pins where id = ?), 20)
+order by p.created_at desc`
+		err = h.db.Raw(q, id, id).Scan(&rows).Error
+	} else {
+		// 既定: 自分 + accepted な友達のみ。
+		const q = `
 with my_friends as (
   select case when requester_id = ? then receiver_id else requester_id end as friend_id
   from friendships
@@ -253,7 +318,9 @@ where p.id <> ?
   and ST_DWithin(p.location, (select location from pins where id = ?), 20)
   and (p.user_id = ? or p.user_id in (select friend_id from my_friends))
 order by p.created_at desc`
-	if err := h.db.Raw(q, me.ID, me.ID, me.ID, id, id, me.ID).Scan(&rows).Error; err != nil {
+		err = h.db.Raw(q, me.ID, me.ID, me.ID, id, id, me.ID).Scan(&rows).Error
+	}
+	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 

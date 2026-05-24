@@ -15,7 +15,9 @@ class _FakePinRepository implements PinRepository {
   _FakePinRepository(this.pins);
   final List<Pin> pins;
   @override
-  Future<List<Pin>> fetchVisible() async => pins;
+  Future<List<Pin>> fetchVisible({bool friendsOnly = false}) async => pins;
+  @override
+  Future<void> delete(String id) async {}
   @override
   Future<Pin> getById(String id) async => throw UnimplementedError();
   @override

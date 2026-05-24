@@ -31,6 +31,19 @@
 
   <title>layer</title>
   <link rel="manifest" href="manifest.json">
+
+  <!-- Google サインイン（GIS / google_sign_in_web）用のクライアント ID -->
+  <meta name="google-signin-client_id"
+        content="320451201665-6i73idon7efp6u8uuv0qkf2i8i4kqgsm.apps.googleusercontent.com">
+
+
+  <!-- Google Maps JavaScript API（google_maps_flutter web 用）。
+       ※実タイル表示には Maps JavaScript API 有効化 + リファラ許可された
+       ブラウザキーが必要。キーはブラウザに露出するため必ず制限をかけること。 -->
+  <script src="https://maps.googleapis.com/maps/api/js?key=YOUR_MAPS_JS_API_KEY"></script>
+  <!-- Web でのクラスタリング（clusterManagers）に必須:
+       google_maps_flutter_web は MarkerClusterer ライブラリを参照する。 -->
+  <script src="https://unpkg.com/@googlemaps/markerclusterer/dist/index.min.js"></script>
 </head>
 <body>
   <!--

@@ -166,6 +166,21 @@ class FriendsController extends Notifier<FriendsState> {
     }
   }
 
+  /// 友達を解除する。楽観的に friends から外し、失敗で巻き戻す。
+  Future<bool> unfriend(PinAuthor friend) async {
+    final prev = state.friends;
+    state = state.copyWith(
+      friends: prev.where((f) => f.id != friend.id).toList(),
+    );
+    try {
+      await ref.read(friendRepositoryProvider).unfriend(friend.id);
+      return true;
+    } catch (_) {
+      state = state.copyWith(friends: prev);
+      return false;
+    }
+  }
+
   /// 申請を拒否する。楽観的に incoming から外し、失敗で巻き戻す。
   Future<bool> reject(IncomingRequest request) async {
     final prevIncoming = state.incoming;

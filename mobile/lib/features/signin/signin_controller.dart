@@ -41,6 +41,43 @@ class SignInController extends Notifier<AsyncValue<void>> {
       return false;
     }
   }
+
+  /// 取得済みの ID トークンでバックエンドにサインインする（Web の GIS 用）。
+  Future<bool> signInWithIdToken(String idToken) async {
+    state = const AsyncLoading();
+    try {
+      await ref.read(apiClientProvider).post<dynamic>(
+        '/api/auth/sign-in',
+        data: {'id_token': idToken},
+      );
+      await ref.read(authStorageProvider).saveIdToken(idToken);
+      state = const AsyncData(null);
+      return true;
+    } catch (e, st) {
+      state = AsyncError<void>(e, st);
+      return false;
+    }
+  }
+
+  /// 開発専用サインイン。Google を介さず固定 id_token でバックエンドに入る。
+  /// バックエンドの DEV_AUTH_BYPASS が有効なときのみ通る。画面側で
+  /// kDebugMode のときだけ呼ぶこと。
+  Future<bool> signInDev() async {
+    state = const AsyncLoading();
+    try {
+      const devToken = 'dev-user';
+      await ref.read(apiClientProvider).post<dynamic>(
+        '/api/auth/sign-in',
+        data: {'id_token': devToken},
+      );
+      await ref.read(authStorageProvider).saveIdToken(devToken);
+      state = const AsyncData(null);
+      return true;
+    } catch (e, st) {
+      state = AsyncError<void>(e, st);
+      return false;
+    }
+  }
 }
 
 final signInControllerProvider =

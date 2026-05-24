@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	authmw "github.com/cymed/layer/backend/internal/middleware"
@@ -118,4 +119,67 @@ func validateIcon(icon string) string {
 func isUniqueViolation(err error) bool {
 	var pgErr *pgconn.PgError
 	return errors.As(err, &pgErr) && pgErr.Code == "23505"
+}
+
+// --- 現在地（点表示）---
+
+type updateLocationRequest struct {
+	Lat float64 `json:"lat"`
+	Lng float64 `json:"lng"`
+}
+
+// UpdateLocation は自分の現在地を更新する（点表示用）。
+func (h *MeHandler) UpdateLocation(c echo.Context) error {
+	user := authmw.CurrentUser(c)
+	if user == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+	var req updateLocationRequest
+	if err := c.Bind(&req); err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, err.Error())
+	}
+	now := time.Now()
+	if err := h.db.Model(&model.User{}).Where("id = ?", user.ID).Updates(map[string]any{
+		"last_lat":         req.Lat,
+		"last_lng":         req.Lng,
+		"last_location_at": now,
+	}).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.NoContent(http.StatusNoContent)
+}
+
+type userLocation struct {
+	UserID string  `json:"userId"`
+	Lat    float64 `json:"lat"`
+	Lng    float64 `json:"lng"`
+}
+
+type locationsResponse struct {
+	Locations []userLocation `json:"locations"`
+}
+
+// ListOthersLocations は自分以外で位置を報告済みのユーザーの現在地を返す（点表示用）。
+func (h *MeHandler) ListOthersLocations(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+	type row struct {
+		ID  string
+		Lat float64
+		Lng float64
+	}
+	var rows []row
+	const q = `select id, last_lat as lat, last_lng as lng
+from users
+where id <> ? and last_lat is not null and last_lng is not null`
+	if err := h.db.Raw(q, me.ID).Scan(&rows).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	locs := make([]userLocation, 0, len(rows))
+	for _, r := range rows {
+		locs = append(locs, userLocation{UserID: r.ID, Lat: r.Lat, Lng: r.Lng})
+	}
+	return c.JSON(http.StatusOK, locationsResponse{Locations: locs})
 }

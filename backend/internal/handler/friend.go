@@ -271,3 +271,20 @@ order by u.user_id`
 	}
 	return c.JSON(http.StatusOK, friendsResponse{Friends: friends})
 }
+
+// Unfriend は自分と :userId の accepted な友達関係を解除する（DELETE /api/friends/:userId）。
+// 冪等: 関係が無くても 204。
+func (h *FriendHandler) Unfriend(c echo.Context) error {
+	me := authmw.CurrentUser(c)
+	if me == nil {
+		return echo.NewHTTPError(http.StatusUnauthorized, "unauthenticated")
+	}
+	other := c.Param("userId")
+	const q = `delete from friendships
+where status = 'accepted'
+  and ((requester_id = ? and receiver_id = ?) or (requester_id = ? and receiver_id = ?))`
+	if err := h.db.Exec(q, me.ID, other, other, me.ID).Error; err != nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+	}
+	return c.NoContent(http.StatusNoContent)
+}

@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"log"
 	"os"
 
@@ -27,6 +29,16 @@ func main() {
 	}
 
 	verify := authmw.GoogleVerifier(cfg.GoogleOAuthClientID)
+	if cfg.DevAuthBypass {
+		// 開発専用: Google 検証をスキップし、id_token をそのまま subject として扱う。
+		log.Println("⚠️  DEV_AUTH_BYPASS 有効: 認証検証をスキップしています（開発専用）")
+		verify = func(ctx context.Context, idToken string) (string, error) {
+			if idToken == "" {
+				return "", errors.New("empty token")
+			}
+			return idToken, nil
+		}
+	}
 	e := router.New(db, verify)
 
 	port := cfg.Port

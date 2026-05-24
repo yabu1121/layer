@@ -40,6 +40,8 @@ class _FakeFriendRepo implements FriendRepository {
 
   @override
   Future<List<IncomingRequest>> listIncoming() async => incoming;
+  @override
+  Future<void> unfriend(String userId) async {}
 
   @override
   Future<void> accept(String requestId) async {

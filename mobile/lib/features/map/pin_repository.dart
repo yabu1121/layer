@@ -6,8 +6,9 @@ import '../../core/models/pin.dart';
 
 /// Pin 取得・投稿のリポジトリ（テストで差し替え可能なよう interface 化）。
 abstract interface class PinRepository {
-  /// 自分 + 友達の可視 Pin を取得する（GET /api/pins/visible）。
-  Future<List<Pin>> fetchVisible();
+  /// 可視 Pin を取得する（GET /api/pins/visible）。
+  /// [friendsOnly] が true なら自分＋友達のみ、false なら全員。
+  Future<List<Pin>> fetchVisible({bool friendsOnly});
 
   /// Pin を投稿する（POST /api/pins）。作成された Pin を返す。
   Future<Pin> create({
@@ -21,6 +22,9 @@ abstract interface class PinRepository {
 
   /// 同じ場所の近傍 Pin を取得する（GET /api/pins/:id/nearby）。
   Future<List<Pin>> getNearby(String id);
+
+  /// 自分の Pin を削除する（DELETE /api/pins/:id）。
+  Future<void> delete(String id);
 }
 
 class ApiPinRepository implements PinRepository {
@@ -29,13 +33,20 @@ class ApiPinRepository implements PinRepository {
   final Dio _dio;
 
   @override
-  Future<List<Pin>> fetchVisible() async {
-    final res =
-        await _dio.get<Map<String, dynamic>>('/api/pins/visible');
+  Future<List<Pin>> fetchVisible({bool friendsOnly = false}) async {
+    final res = await _dio.get<Map<String, dynamic>>(
+      '/api/pins/visible',
+      queryParameters: friendsOnly ? {'scope': 'friends'} : null,
+    );
     final list = (res.data!['pins'] as List?) ?? const [];
     return list
         .map((j) => Pin.fromJson((j as Map).cast<String, dynamic>()))
         .toList();
+  }
+
+  @override
+  Future<void> delete(String id) async {
+    await _dio.delete<dynamic>('/api/pins/$id');
   }
 
   @override

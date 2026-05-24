@@ -15,7 +15,11 @@ enum SplashDestination { signIn, onboarding, map }
 ///    - 401 → トークン破棄 → signIn
 ///    - 200 + displayName 空 → onboarding / 入っていれば → map
 /// 3. ネットワークエラー等は rethrow し、UI（再試行ボタン）に委ねる。
-final splashDestinationProvider = FutureProvider<SplashDestination>((ref) async {
+///
+/// autoDispose にして、SplashScreen を再表示するたびに再評価させる
+/// （サインイン後に `/` へ戻った際、キャッシュ値のままで止まらないように）。
+final splashDestinationProvider =
+    FutureProvider.autoDispose<SplashDestination>((ref) async {
   final authStorage = ref.watch(authStorageProvider);
   final token = authStorage.readIdToken();
   if (token == null || token.isEmpty) {

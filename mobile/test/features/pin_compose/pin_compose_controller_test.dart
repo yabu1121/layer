@@ -36,7 +36,9 @@ class _FakePinRepo implements PinRepository {
   double? createdLng;
 
   @override
-  Future<List<Pin>> fetchVisible() async => const [];
+  Future<List<Pin>> fetchVisible({bool friendsOnly = false}) async => const [];
+  @override
+  Future<void> delete(String id) async {}
 
   @override
   Future<Pin> getById(String id) async => throw UnimplementedError();

@@ -28,7 +28,9 @@ class _GrantedLocation implements LocationService {
 
 class _EmptyPins implements PinRepository {
   @override
-  Future<List<Pin>> fetchVisible() async => const [];
+  Future<List<Pin>> fetchVisible({bool friendsOnly = false}) async => const [];
+  @override
+  Future<void> delete(String id) async {}
   @override
   Future<Pin> getById(String id) async => throw UnimplementedError();
   @override
@@ -95,7 +97,7 @@ void main() {
 
     await tester.tap(find.text('自分'));
     await tester.pumpAndSettle();
-    expect(find.text('Profile'), findsOneWidget);
+    expect(find.text('ログアウト'), findsOneWidget); // ProfileScreen
 
     await tester.tap(find.text('地図'));
     await tester.pumpAndSettle();

@@ -45,7 +45,8 @@ func (h *ReactionHandler) authorizePin(c echo.Context, me *model.User) (ownerID 
 	if ownerID == "" {
 		return "", echo.NewHTTPError(http.StatusNotFound, "pin not found")
 	}
-	if ownerID != me.ID {
+	// 既定（友達限定）では自分か友達の Pin のみ。公開モードでは誰でも可。
+	if !pinsPublic() && ownerID != me.ID {
 		friends, ferr := access.IsFriend(h.db, me.ID, ownerID)
 		if ferr != nil {
 			return "", echo.NewHTTPError(http.StatusInternalServerError, ferr.Error())

@@ -63,11 +63,16 @@ class PinDetailController extends Notifier<PinDetailState> {
       final repo = ref.read(pinRepositoryProvider);
       final pin = await repo.getById(pinId);
       final nearby = await repo.getNearby(pinId);
-      final label = await ref
-          .read(geocodingServiceProvider)
-          .reverseGeocode(pin.lat, pin.lng);
 
-      // 共感と自分の情報はベストエフォート（失敗しても詳細は表示する）。
+      // 場所ラベルはベストエフォート（geocoding は Web 非対応のことがある）。
+      String? label;
+      try {
+        label = await ref
+            .read(geocodingServiceProvider)
+            .reverseGeocode(pin.lat, pin.lng);
+      } catch (_) {}
+
+      // 共感と自分の情報もベストエフォート（失敗しても詳細は表示する）。
       var reactors = <PinAuthor>[];
       try {
         reactors = await ref.read(reactionRepositoryProvider).list(pinId);
@@ -97,6 +102,25 @@ class PinDetailController extends Notifier<PinDetailState> {
   }
 
   Future<void> selectPin(String pinId) => load(pinId);
+
+  /// 自分かどうか（メイン Pin の削除可否）。
+  bool get canDeleteMain {
+    final me = state.myAuthor;
+    final pin = state.mainPin;
+    return me != null && pin != null && pin.isMine(me.id);
+  }
+
+  /// メイン Pin（自分の投稿）を削除する。成功で true。
+  Future<bool> deleteMain() async {
+    final pin = state.mainPin;
+    if (pin == null) return false;
+    try {
+      await ref.read(pinRepositoryProvider).delete(pin.id);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
 
   /// 「わかる」をトグルする。楽観的に reactors を更新し、API 失敗で巻き戻す。
   /// 成功で true、失敗（要再試行）で false を返す。
