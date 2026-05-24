@@ -71,9 +71,10 @@ func setupDB(t *testing.T) *gorm.DB {
 		t.Fatalf("automigrate: %v", err)
 	}
 	// 前回の記録が残っていると 002 が skip されるため、未適用に戻してから再適用する。
-	// drop table pins cascade で pins 関連 FK（005）も落ちるので 005 も再適用させる。
-	// schema_migrations が未作成でもエラーは無視してよい（MigrateSQL が作る）。
-	_ = db.Exec("delete from schema_migrations where version in (?, ?)", "002_pin_location", "005_foreign_keys").Error
+	// drop table pins cascade で pins 関連 FK（005 / comments の 006）も落ちるので
+	// それらも再適用させる。schema_migrations が未作成でもエラーは無視してよい。
+	_ = db.Exec("delete from schema_migrations where version in (?, ?, ?)",
+		"002_pin_location", "005_foreign_keys", "006_comment_foreign_keys").Error
 	if err := database.MigrateSQL(db); err != nil {
 		t.Fatalf("migrate sql: %v", err)
 	}
