@@ -376,9 +376,17 @@ US-A6, US-A7, US-B5, US-B6, US-B7, US-C5, US-C6, US-D5, US-D6, US-E5, US-E6, US-
 各ディレクトリの `.env.example` をコピーして使う。いずれも Git には上げない。
 
 ```dotenv
-# backend/.env
+# backend/.env（主要なもの。全項目は backend/.env.example を参照）
 PORT=8080
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/layer?sslmode=disable
+GOOGLE_OAUTH_CLIENT_ID=
+ALLOWED_ORIGINS=                 # CORS 許可オリジン（未設定=全許可）
+# 画像アップロード（Cloudflare R2・S3 互換。未設定なら presign API は 503）
+R2_ACCOUNT_ID=
+R2_BUCKET=
+R2_ACCESS_KEY_ID=
+R2_SECRET_ACCESS_KEY=
+R2_PUBLIC_BASE_URL=
 ```
 
 ```dotenv

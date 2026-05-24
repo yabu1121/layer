@@ -92,6 +92,7 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	reaction := handler.NewReactionHandler(db)
 	comment := handler.NewCommentHandler(db)
 	block := handler.NewBlockHandler(db)
+	upload := handler.NewUploadHandler()
 	notification := handler.NewNotificationHandler(db)
 
 	// /api/* は認証必須。サインイン／サインアウトは認証前に叩くため除外する。
@@ -124,6 +125,7 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 	api.GET("/pins/:id/nearby", pin.Nearby)
 	api.POST("/pins", pin.Create)
 	api.DELETE("/pins/:id", pin.Delete)
+	api.POST("/uploads/pin-image/presign", upload.PresignPinImage)
 	api.GET("/pins/:id/reactions", reaction.List)
 	api.POST("/pins/:id/reactions", reaction.Create)
 	api.DELETE("/pins/:id/reactions/me", reaction.DeleteMine)
