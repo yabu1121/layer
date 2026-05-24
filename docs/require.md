@@ -289,8 +289,9 @@ US-A6, US-A7, US-B5, US-B6, US-B7, US-C5, US-C6, US-D5, US-D6, US-E5, US-E6, US-
 | Pin の公開範囲 | 既定は「友達のみ」（MVP の設計どおり）。環境変数 `PINS_PUBLIC=1` を立てると全 Pin が友達以外にも見える公開モードになる（§9.2 公開機能の布石。本番は未設定＝友達限定）。`scope=friends` 指定時は公開モードでも常に友達限定 |
 | 位置情報の精度 | 投稿時の正確な GPS を保存（友達には正確な位置が共有される点に留意） |
 | 現在地の共有（点表示） | 地図上の現在地ドットは **accepted な友達にのみ** 共有する（`GET /api/locations` は友達限定）。`POST /api/me/location` で自分の現在地を更新。非友達には露出しない |
-| 友達以外への露出 | ゼロ。DB レベルで保証する（Supabase RLS）。具体方針は model.md §5 を参照。`pins` の友達限定ポリシーには friendship 判定関数（`SECURITY DEFINER`）が必要で、付録 A の「最低限設定」だけでは不十分 |
-| 認証 | Google OAuth、Supabase Auth が管理 |
+| 友達以外への露出 | ゼロ。**backend の API ロジックで保証する**（DB 直結のため Supabase RLS は使わない。`access.IsFriend` + 各ハンドラの判定。付録 A 参照）。`scope=friends` / 既定の友達限定クエリで担保 |
+| HTTP 層の防御 | CORS は env `ALLOWED_ORIGINS` で許可オリジン限定（未設定時は開発用に全許可）。セキュリティヘッダ（`Secure`）・ボディ上限（1MB）・リクエスト ID 付きアクセスログ（機密ヘッダは出さない）を適用 |
+| 認証 | Google OAuth。ID トークンを backend が検証（`aud` = `GOOGLE_OAUTH_CLIENT_ID`） |
 | データ削除 | アカウント削除機能は MVP では未実装。**App Store 本番リリース前には必須**（Apple はアカウント作成機能を持つアプリに削除機能を要求）。TestFlight 配布のみなら審査対象外。§9.3 参照 |
 | 通報・モデレーション | MVP では未実装。公開範囲が「友達のみ」固定のためリスクは限定的。公開機能（§9.2）導入時には必須。§9.3 参照 |
 
