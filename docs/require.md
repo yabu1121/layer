@@ -432,7 +432,7 @@ MVP リリース後、段階的に追加していく機能。
 ハッカソン MVP（TestFlight / Internal Testing 配布）では不要だが、**App Store / Google Play への本番リリース前に必須**となる項目。
 
 - **アカウント削除機能** — Apple はアカウント作成機能を持つアプリにアプリ内からの削除導線を要求する。`users` と関連レコードの削除を実装する。**backend は実装済み**（`DELETE /api/me`。トランザクションで pins / reactions / comments / pin_discoveries / friendships / notifications / users を FK 順序で削除）。モバイルの削除導線（プロフィールからの確認ダイアログ）は別途追加する。
-- **通報・ブロック機能** — 公開機能（§9.2）を入れる場合は特に必須。US-A7（ブロック）の **テーブルと API は実装済み**（`blocks` テーブル、`POST/DELETE /api/blocks/:userId`、`GET /api/blocks`。ブロック時は friendship を解消）。可視性（Pin / 現在地 / 反応 / コメント）からのブロック除外と通報機能は今後追加する。
+- **通報・ブロック機能** — 公開機能（§9.2）を入れる場合は特に必須。US-A7（ブロック）の **テーブル・API・可視性除外は実装済み**（`blocks` テーブル、`POST/DELETE /api/blocks/:userId`、`GET /api/blocks`。ブロック時は friendship を解消し、Pin 一覧/近傍/詳細・反応・コメントからブロック相手を除外）。**通報機能は今後追加する**。
 - 利用規約・プライバシーポリシーの整備と同意フローの正式化（位置情報を扱うため要記載）。
 
 ### 9.4 Phase 4: 共感の表現拡張

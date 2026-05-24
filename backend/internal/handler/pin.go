@@ -187,6 +187,15 @@ type visiblePinsResponse struct {
 	Pins []createdPin `json:"pins"`
 }
 
+// notBlockedByOwner は p.user_id が閲覧者とブロック関係（双方向）にある Pin を
+// 除外する WHERE 条件。プレースホルダは (me, me) を取る。公開モードでブロック
+// 相手の Pin を出さないために使う（友達限定分岐はブロックで友達解消済みのため不要）。
+const notBlockedByOwner = `not exists (
+	select 1 from blocks b
+	where (b.blocker_id = ? and b.blocked_id = p.user_id)
+	   or (b.blocker_id = p.user_id and b.blocked_id = ?)
+)`
+
 // ListVisible は自分と accepted な友達の Pin を投稿者情報つきで返す
 // （FR-4.2 / model.md §3.1 get_visible_pins 相当）。
 func (h *PinHandler) ListVisible(c echo.Context) error {
@@ -216,8 +225,9 @@ order by p.created_at desc`
 		const q = `select ` + pinWithAuthorColumns + `
 from pins p
 join users u on u.id = p.user_id
+where ` + notBlockedByOwner + `
 order by p.created_at desc`
-		err = h.db.Raw(q).Scan(&rows).Error
+		err = h.db.Raw(q, me.ID, me.ID).Scan(&rows).Error
 	}
 	if err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
@@ -279,6 +289,16 @@ where p.id = ?`
 	if r.ID == "" {
 		return echo.NewHTTPError(http.StatusNotFound, "pin not found")
 	}
+	// ブロック関係があれば公開モードでも見せない。
+	if r.UserID != me.ID {
+		blocked, err := access.IsBlocked(h.db, me.ID, r.UserID)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
+		}
+		if blocked {
+			return echo.NewHTTPError(http.StatusForbidden, "not allowed")
+		}
+	}
 	// 既定（友達限定）では自分か友達のみ。公開モードでは誰でも閲覧可。
 	if !pinsPublic() && r.UserID != me.ID {
 		friends, err := access.IsFriend(h.db, me.ID, r.UserID)
@@ -312,14 +332,15 @@ func (h *PinHandler) Nearby(c echo.Context) error {
 	var rows []pinRow
 	var err error
 	if pinsPublic() {
-		// 公開モード: 同じ場所の全ユーザーの Pin。
+		// 公開モード: 同じ場所の全ユーザーの Pin（ブロック相手は除外）。
 		const q = `select ` + pinWithAuthorColumns + `
 from pins p
 join users u on u.id = p.user_id
 where p.id <> ?
   and ST_DWithin(p.location, (select location from pins where id = ?), 20)
+  and ` + notBlockedByOwner + `
 order by p.created_at desc`
-		err = h.db.Raw(q, id, id).Scan(&rows).Error
+		err = h.db.Raw(q, id, id, me.ID, me.ID).Scan(&rows).Error
 	} else {
 		// 既定: 自分 + accepted な友達のみ。
 		const q = `

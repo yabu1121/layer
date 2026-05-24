@@ -141,7 +141,9 @@ create index on blocks (blocked_id);
 > US-A7。`blocker` が `blocked` を遮断する。片方向のブロックでも双方の可視性を
 > 遮断する（`access.IsBlocked`）。ブロック時は両者の friendship を解消する。
 > FK は `on delete cascade`（ユーザー削除で消える）。migration `007_block_foreign_keys.sql`。
-> 可視性（Pin / 現在地 / 反応 / コメント）からの除外は別 issue で組み込む。
+> 可視性: 公開モードの Pin 一覧 / 近傍、Pin 詳細、リアクション / コメントでブロック
+> 相手を除外（403）。現在地（`GET /api/locations`）は友達限定かつブロックで friendship
+> が解消されるため自動的に除外される。
 
 ### pin_discoveries（発見ログ）
 
