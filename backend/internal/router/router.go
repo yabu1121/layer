@@ -2,14 +2,47 @@ package router
 
 import (
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/cymed/layer/backend/internal/handler"
 	authmw "github.com/cymed/layer/backend/internal/middleware"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 )
+
+// rateLimiterMW は IP 単位のレート制限ミドルウェアを返す（超過時 429）。
+// rps は 1 秒あたりの許可数、burst は瞬間的に許せる上限。
+func rateLimiterMW(rps float64, burst int) echo.MiddlewareFunc {
+	store := middleware.NewRateLimiterMemoryStoreWithConfig(middleware.RateLimiterMemoryStoreConfig{
+		Rate:      rate.Limit(rps),
+		Burst:     burst,
+		ExpiresIn: 3 * time.Minute,
+	})
+	return middleware.RateLimiterWithConfig(middleware.RateLimiterConfig{Store: store})
+}
+
+// envFloat / envInt は env から数値を読む（未設定・不正なら def）。
+func envFloat(key string, def float64) float64 {
+	if v := os.Getenv(key); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return f
+		}
+	}
+	return def
+}
+
+func envInt(key string, def int) int {
+	if v := os.Getenv(key); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			return n
+		}
+	}
+	return def
+}
 
 // maxBodyBytes は API リクエストボディの上限。画像は presigned で R2 へ直接
 // アップロードするため、API 本体は小さくてよい。
@@ -61,8 +94,12 @@ func New(db *gorm.DB, verify authmw.VerifyFunc) *echo.Echo {
 
 	// /api/* は認証必須。サインイン／サインアウトは認証前に叩くため除外する。
 	api := e.Group("/api")
+	// レート制限（濫用対策）。認証より前に通し、未認証の連打も弾く。
+	api.Use(rateLimiterMW(envFloat("RATE_LIMIT_RPS", 20), envInt("RATE_LIMIT_BURST", 40)))
 	api.Use(authmw.RequireAuth(db, verify, "/api/auth/sign-in", "/api/auth/sign-out"))
-	api.POST("/auth/sign-in", auth.SignIn)
+	// サインインは総当たり対策で別途厳しめのレート制限を掛ける。
+	api.POST("/auth/sign-in", auth.SignIn,
+		rateLimiterMW(envFloat("AUTH_RATE_LIMIT_RPS", 1), envInt("AUTH_RATE_LIMIT_BURST", 5)))
 	api.POST("/auth/sign-out", auth.SignOut)
 	api.GET("/me", me.Get)
 	api.POST("/me/profile", me.UpdateProfile)
