@@ -11,7 +11,7 @@ import 'package:layer/features/pin_detail/comment_repository.dart';
 import 'package:layer/features/pin_detail/pin_detail_screen.dart';
 import 'package:layer/features/pin_detail/reaction_repository.dart';
 
-Pin _pin(String id) => Pin(
+Pin _pin(String id, {String? imageUrl}) => Pin(
       id: id,
       ownerId: 'o$id',
       body: 'body-$id',
@@ -24,14 +24,16 @@ Pin _pin(String id) => Pin(
         displayName: 'name-$id',
         icon: '🐱',
       ),
+      imageUrl: imageUrl,
     );
 
 class _FakePinRepo implements PinRepository {
-  _FakePinRepo(this.nearby);
+  _FakePinRepo(this.nearby, {this.mainImageUrl});
   final List<Pin> nearby;
+  final String? mainImageUrl;
 
   @override
-  Future<Pin> getById(String id) async => _pin(id);
+  Future<Pin> getById(String id) async => _pin(id, imageUrl: mainImageUrl);
   @override
   Future<List<Pin>> getNearby(String id) async => nearby;
   @override
@@ -89,9 +91,12 @@ class _FakeCommentRepo implements CommentRepository {
   }
 }
 
-Widget _app(List<Pin> nearby, {_FakeCommentRepo? comments}) => ProviderScope(
+Widget _app(List<Pin> nearby,
+        {_FakeCommentRepo? comments, String? mainImageUrl}) =>
+    ProviderScope(
       overrides: [
-        pinRepositoryProvider.overrideWithValue(_FakePinRepo(nearby)),
+        pinRepositoryProvider
+            .overrideWithValue(_FakePinRepo(nearby, mainImageUrl: mainImageUrl)),
         geocodingServiceProvider.overrideWithValue(_FakeGeocoding()),
         reactionRepositoryProvider.overrideWithValue(_FakeReaction()),
         commentRepositoryProvider
@@ -133,6 +138,20 @@ void main() {
 
     expect(find.text('body-p1'), findsOneWidget);
     expect(find.text('ここではまだあなただけです'), findsOneWidget);
+  });
+
+  testWidgets('imageUrl があれば画像を表示する', (tester) async {
+    await tester.pumpWidget(
+      _app(const [], mainImageUrl: 'https://cdn.example/r2/x.jpg'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsOneWidget);
+  });
+
+  testWidgets('imageUrl が無ければ画像を表示しない', (tester) async {
+    await tester.pumpWidget(_app(const []));
+    await tester.pumpAndSettle();
+    expect(find.byType(Image), findsNothing);
   });
 
   testWidgets('コメントを一覧表示し、投稿で即時反映する', (tester) async {
