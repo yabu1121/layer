@@ -375,7 +375,84 @@ class _MapView extends StatelessWidget {
             child: const Icon(Icons.my_location),
           ),
         ),
+        // マーカー色の凡例（タップで開閉）。
+        const Positioned(left: 12, bottom: 16, child: _MapLegend()),
       ],
+    );
+  }
+}
+
+/// マーカー色の凡例。折りたたみ式で、タップで開閉する。
+class _MapLegend extends StatefulWidget {
+  const _MapLegend();
+
+  @override
+  State<_MapLegend> createState() => _MapLegendState();
+}
+
+class _MapLegendState extends State<_MapLegend> {
+  bool _open = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    return Material(
+      elevation: 2,
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => setState(() => _open = !_open),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+          child: _open
+              ? const Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _LegendRow(color: Colors.red, label: '自分'),
+                    _LegendRow(color: Colors.orange, label: '友達'),
+                    _LegendRow(color: Colors.blue, label: '現在地'),
+                    _LegendRow(color: Colors.purple, label: '友達の現在地'),
+                  ],
+                )
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.info_outline,
+                        size: 16, color: theme.colorScheme.outline),
+                    const SizedBox(width: 4),
+                    Text('凡例', style: theme.textTheme.labelSmall),
+                  ],
+                ),
+        ),
+      ),
+    );
+  }
+}
+
+class _LegendRow extends StatelessWidget {
+  const _LegendRow({required this.color, required this.label});
+
+  final Color color;
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 2),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 12,
+            height: 12,
+            decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 6),
+          Text(label, style: Theme.of(context).textTheme.labelSmall),
+        ],
+      ),
     );
   }
 }
