@@ -6,6 +6,9 @@ import '../../core/api/api_client.dart';
 import '../../core/auth/auth_storage.dart';
 import '../../core/auth/current_user.dart';
 import '../../core/auth/google_auth.dart';
+import '../../core/widgets/error_view.dart';
+import 'profile_header.dart';
+import 'user_profile_screen.dart' show userPinsProvider;
 
 /// 自分のプロフィールとログアウト（screens.md §2.9）。
 class ProfileScreen extends ConsumerWidget {
@@ -14,7 +17,6 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final userAsync = ref.watch(currentUserProvider);
-    final theme = Theme.of(context);
 
     return Scaffold(
       appBar: AppBar(
@@ -36,17 +38,16 @@ class ProfileScreen extends ConsumerWidget {
         children: [
           const SizedBox(height: 24),
           userAsync.when(
-            data: (u) => Column(
-              children: [
-                Text(u.icon, style: const TextStyle(fontSize: 56)),
-                const SizedBox(height: 8),
-                Text(u.displayName, style: theme.textTheme.titleLarge),
-                Text('@${u.userId}', style: theme.textTheme.bodyMedium),
-              ],
+            data: (u) => ProfileHeader(
+              icon: u.icon,
+              displayName: u.displayName,
+              userId: u.userId,
+              postCount: ref.watch(userPinsProvider(u.id)).valueOrNull?.length,
             ),
             loading: () => const Center(child: CircularProgressIndicator()),
-            error: (_, __) =>
-                const Center(child: Text('プロフィールを取得できませんでした')),
+            error: (_, __) => const ErrorView(
+              message: 'プロフィールを取得できませんでした',
+            ),
           ),
           const SizedBox(height: 32),
           Padding(
