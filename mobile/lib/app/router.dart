@@ -17,6 +17,30 @@ import '../features/signin/signin_screen.dart';
 import '../features/splash/splash_screen.dart';
 import 'main_shell.dart';
 
+/// push 系ルート共通のトランジション（フェード＋わずかな下からのスライド）。
+CustomTransitionPage<void> _fadeSlidePage(GoRouterState state, Widget child) {
+  return CustomTransitionPage<void>(
+    key: state.pageKey,
+    child: child,
+    transitionDuration: const Duration(milliseconds: 250),
+    reverseTransitionDuration: const Duration(milliseconds: 200),
+    transitionsBuilder: (context, animation, secondaryAnimation, child) {
+      final curved =
+          CurvedAnimation(parent: animation, curve: Curves.easeOutCubic);
+      return FadeTransition(
+        opacity: curved,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.03),
+            end: Offset.zero,
+          ).animate(curved),
+          child: child,
+        ),
+      );
+    },
+  );
+}
+
 /// アプリ全体のルーティング定義。
 ///
 /// 認証フロー（/, /signin, /onboarding）と Pin 全画面（/pin/*）はトップレベル、
@@ -41,43 +65,47 @@ final routerProvider = Provider<GoRouter>((ref) {
       // 友達画面（プロフィールから push して開く全画面）。
       GoRoute(
         path: '/friends',
-        builder: (context, state) => const FriendsScreen(),
+        pageBuilder: (context, state) =>
+            _fadeSlidePage(state, const FriendsScreen()),
       ),
       // プロフィール編集（プロフィールから extra で User を渡して push）。
       GoRoute(
         path: '/profile/edit',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final user = state.extra as User?;
-          if (user == null) {
-            return const Scaffold(
-              body: Center(child: Text('プロフィール情報がありません')),
-            );
-          }
-          return ProfileEditScreen(user: user);
+          final child = user == null
+              ? const Scaffold(
+                  body: Center(child: Text('プロフィール情報がありません')),
+                )
+              : ProfileEditScreen(user: user);
+          return _fadeSlidePage(state, child);
         },
       ),
       // 他ユーザーのプロフィール（友達一覧などから extra で PinAuthor を渡す）。
       GoRoute(
         path: '/users/:id',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           final user = state.extra as PinAuthor?;
-          if (user == null) {
-            return const Scaffold(
-              body: Center(child: Text('ユーザー情報がありません')),
-            );
-          }
-          return UserProfileScreen(user: user);
+          final child = user == null
+              ? const Scaffold(
+                  body: Center(child: Text('ユーザー情報がありません')),
+                )
+              : UserProfileScreen(user: user);
+          return _fadeSlidePage(state, child);
         },
       ),
       // 静的な /pin/compose を /pin/:id より先に置き、優先的にマッチさせる。
       GoRoute(
         path: '/pin/compose',
-        builder: (context, state) => const PinComposeScreen(),
+        pageBuilder: (context, state) =>
+            _fadeSlidePage(state, const PinComposeScreen()),
       ),
       GoRoute(
         path: '/pin/:id',
-        builder: (context, state) =>
-            PinDetailScreen(pinId: state.pathParameters['id']!),
+        pageBuilder: (context, state) => _fadeSlidePage(
+          state,
+          PinDetailScreen(pinId: state.pathParameters['id']!),
+        ),
       ),
       // ボトムタブ（地図 / 通知 / 自分）。
       StatefulShellRoute.indexedStack(
