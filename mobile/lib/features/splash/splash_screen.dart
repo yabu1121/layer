@@ -47,12 +47,12 @@ class _LoadingBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
+    return const Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Layer', style: Theme.of(context).textTheme.headlineMedium),
-        const SizedBox(height: 24),
-        const CircularProgressIndicator(),
+        _AnimatedLogo(),
+        SizedBox(height: 24),
+        CircularProgressIndicator(),
       ],
     );
   }
@@ -68,12 +68,49 @@ class _ErrorBody extends StatelessWidget {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text('Layer', style: Theme.of(context).textTheme.headlineMedium),
+        const _AnimatedLogo(),
         const SizedBox(height: 16),
         const Text('接続に失敗しました'),
         const SizedBox(height: 16),
         FilledButton(onPressed: onRetry, child: const Text('再試行')),
       ],
+    );
+  }
+}
+
+/// 起動時にフェード＋スケールで登場するロゴ。
+class _AnimatedLogo extends StatefulWidget {
+  const _AnimatedLogo();
+
+  @override
+  State<_AnimatedLogo> createState() => _AnimatedLogoState();
+}
+
+class _AnimatedLogoState extends State<_AnimatedLogo>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 600),
+  )..forward();
+  late final Animation<double> _fade =
+      CurvedAnimation(parent: _controller, curve: Curves.easeOut);
+  late final Animation<double> _scale = Tween<double>(begin: 0.8, end: 1.0)
+      .animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return FadeTransition(
+      opacity: _fade,
+      child: ScaleTransition(
+        scale: _scale,
+        child: Text('Layer', style: Theme.of(context).textTheme.headlineMedium),
+      ),
     );
   }
 }
