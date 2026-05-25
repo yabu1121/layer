@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../core/models/comment.dart';
+import '../../core/models/emotion.dart';
 import '../../core/models/pin.dart';
 import '../../core/widgets/empty_view.dart';
 import '../map/map_controller.dart';
@@ -460,6 +461,14 @@ class _PinCard extends StatelessWidget {
               const SizedBox(height: 8),
               if (pin.imageUrl != null) ...[
                 _PinImage(url: pin.imageUrl!),
+                const SizedBox(height: 8),
+              ],
+              if (emotionByKey(pin.emotion) case final e?) ...[
+                Chip(
+                  label: Text('${e.emoji} ${e.label}'),
+                  visualDensity: VisualDensity.compact,
+                  materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
                 const SizedBox(height: 8),
               ],
               Text(pin.body),

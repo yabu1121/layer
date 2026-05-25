@@ -55,6 +55,7 @@ class _FakePinRepo implements PinRepository {
   double? createdLat;
   double? createdLng;
   String? createdImageUrl;
+  String? createdEmotion;
 
   @override
   Future<List<Pin>> fetchVisible({bool friendsOnly = false}) async => const [];
@@ -73,12 +74,14 @@ class _FakePinRepo implements PinRepository {
     required double lat,
     required double lng,
     String? imageUrl,
+    String? emotion,
   }) async {
     if (throwOnCreate) throw Exception('network');
     createdBody = body;
     createdLat = lat;
     createdLng = lng;
     createdImageUrl = imageUrl;
+    createdEmotion = emotion;
     return Pin(
       id: 'new',
       ownerId: 'me',
@@ -196,6 +199,33 @@ void main() {
     expect(result, PinComposeResult.success);
     expect(upload.uploadedContentType, 'image/png');
     expect(repo.createdImageUrl, 'https://cdn.example/pin-images/uploaded.jpg');
+  });
+
+  test('感情ラベル: 選択して submit すると emotion を渡す（再選択で解除）', () async {
+    final repo = _FakePinRepo();
+    final c = _container(repo: repo);
+    final n = c.read(pinComposeControllerProvider.notifier);
+    await n.initialize();
+    n.updateBody('落ち着く');
+
+    n.toggleEmotion('calm');
+    expect(c.read(pinComposeControllerProvider).emotion, 'calm');
+    n.toggleEmotion('calm'); // 再選択で解除
+    expect(c.read(pinComposeControllerProvider).emotion, isNull);
+    n.toggleEmotion('happy');
+
+    await n.submit();
+    expect(repo.createdEmotion, 'happy');
+  });
+
+  test('感情なし: emotion は null で create する', () async {
+    final repo = _FakePinRepo();
+    final c = _container(repo: repo);
+    final n = c.read(pinComposeControllerProvider.notifier);
+    await n.initialize();
+    n.updateBody('感情なし');
+    await n.submit();
+    expect(repo.createdEmotion, isNull);
   });
 
   test('画像なし: image_url は null で create する', () async {
