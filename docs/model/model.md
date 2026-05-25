@@ -77,6 +77,7 @@ create table pins (
   user_id    uuid not null references users(id),
   body       text not null,                              -- 200 文字制限はクライアント側
   image_url  text,                                       -- 任意。R2 上の画像 URL（US-B3）
+  emotion    text,                                       -- 任意。感情ラベル（US-B4）
   location   geography(point, 4326) not null,            -- 緯度経度
   created_at timestamptz not null default now()
 );
@@ -85,9 +86,9 @@ create index on pins (user_id);
 create index on pins using gist (location);              -- 地理空間インデックス
 ```
 
-> `image_url` は写真添付（US-B3）用。nullable のため AutoMigrate で追加する
-> （`location` のみ PostGIS のため SQL マイグレーション管理）。感情ラベル（US-B4）は
-> 未実装で、導入時は `emotion text` を追加する想定。
+> `image_url`（US-B3）/ `emotion`（US-B4）は任意。nullable のため AutoMigrate で追加する
+> （`location` のみ PostGIS のため SQL マイグレーション管理）。`emotion` の許可値は
+> `calm` / `happy` / `excited` / `nostalgic` / `moved`（API で検証）。
 
 ### reactions
 
