@@ -5,6 +5,7 @@ import '../../core/models/comment.dart';
 import '../../core/models/emotion.dart';
 import '../../core/models/pin.dart';
 import '../../core/widgets/empty_view.dart';
+import '../../core/widgets/photo_viewer.dart';
 import '../map/map_controller.dart';
 import 'pin_detail_controller.dart';
 
@@ -583,27 +584,33 @@ class _PinImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final fallback = Theme.of(context).colorScheme.surfaceContainerHighest;
-    return ClipRRect(
-      borderRadius: BorderRadius.circular(8),
-      child: Image.network(
-        url,
-        width: double.infinity,
-        height: 180,
-        fit: BoxFit.cover,
-        loadingBuilder: (context, child, progress) {
-          if (progress == null) return child;
-          return Container(
+    return GestureDetector(
+      onTap: () => PhotoViewer.open(context, url),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(8),
+        child: Hero(
+          tag: url,
+          child: Image.network(
+            url,
+            width: double.infinity,
             height: 180,
-            alignment: Alignment.center,
-            color: fallback,
-            child: const CircularProgressIndicator(),
-          );
-        },
-        errorBuilder: (context, error, stack) => Container(
-          height: 180,
-          alignment: Alignment.center,
-          color: fallback,
-          child: const Icon(Icons.broken_image_outlined),
+            fit: BoxFit.cover,
+            loadingBuilder: (context, child, progress) {
+              if (progress == null) return child;
+              return Container(
+                height: 180,
+                alignment: Alignment.center,
+                color: fallback,
+                child: const CircularProgressIndicator(),
+              );
+            },
+            errorBuilder: (context, error, stack) => Container(
+              height: 180,
+              alignment: Alignment.center,
+              color: fallback,
+              child: const Icon(Icons.broken_image_outlined),
+            ),
+          ),
         ),
       ),
     );
