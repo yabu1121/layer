@@ -8,8 +8,16 @@ class AppTheme {
   /// ブランドのシード色（つながり・場所を感じる柔らかいティール）。
   static const seed = Color(0xFF2E9E8F);
 
-  static ThemeData light() {
-    final scheme = ColorScheme.fromSeed(seedColor: seed);
+  /// ライトテーマ。
+  static ThemeData light() => _build(ColorScheme.fromSeed(seedColor: seed));
+
+  /// ダークテーマ（システム設定がダークのとき使用）。
+  static ThemeData dark() => _build(
+        ColorScheme.fromSeed(seedColor: seed, brightness: Brightness.dark),
+      );
+
+  /// ColorScheme から共通の体裁で ThemeData を組み立てる。
+  static ThemeData _build(ColorScheme scheme) {
     return ThemeData(
       useMaterial3: true,
       colorScheme: scheme,

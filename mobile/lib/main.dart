@@ -30,6 +30,8 @@ class LayerApp extends ConsumerWidget {
     return MaterialApp.router(
       title: 'Layer',
       theme: AppTheme.light(),
+      darkTheme: AppTheme.dark(),
+      themeMode: ThemeMode.system,
       routerConfig: router,
     );
   }
