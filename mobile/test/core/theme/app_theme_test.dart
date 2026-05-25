@@ -10,6 +10,13 @@ void main() {
     expect(t.appBarTheme.centerTitle, isFalse);
   });
 
+  test('dark: ダークの配色で同じ体裁', () {
+    final t = AppTheme.dark();
+    expect(t.useMaterial3, isTrue);
+    expect(t.colorScheme.brightness, Brightness.dark);
+    expect(t.appBarTheme.centerTitle, isFalse);
+  });
+
   testWidgets('テーマ適用で主要ウィジェットがビルドできる', (tester) async {
     await tester.pumpWidget(
       MaterialApp(
