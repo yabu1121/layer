@@ -9,8 +9,8 @@ import 'image_upload_repository.dart';
 
 enum PinComposeResult { invalid, success, error }
 
-/// copyWith で image を「明示的に null へ」できるようにするセンチネル。
-const _imageSentinel = Object();
+/// copyWith で null を「明示的にセット」できるようにするセンチネル。
+const _sentinel = Object();
 
 /// Pin 投稿フォームの状態。
 class PinComposeState {
@@ -22,6 +22,7 @@ class PinComposeState {
     this.isLocating = true,
     this.isSubmitting = false,
     this.image,
+    this.emotion,
   });
 
   final double? lat;
@@ -33,6 +34,9 @@ class PinComposeState {
 
   /// 添付する画像（未選択なら null）。
   final PickedImage? image;
+
+  /// 選択した感情ラベルの key（未選択なら null）。
+  final String? emotion;
 
   static const maxBody = 200;
 
@@ -56,7 +60,8 @@ class PinComposeState {
     String? body,
     bool? isLocating,
     bool? isSubmitting,
-    Object? image = _imageSentinel,
+    Object? image = _sentinel,
+    Object? emotion = _sentinel,
   }) =>
       PinComposeState(
         lat: lat ?? this.lat,
@@ -65,9 +70,9 @@ class PinComposeState {
         body: body ?? this.body,
         isLocating: isLocating ?? this.isLocating,
         isSubmitting: isSubmitting ?? this.isSubmitting,
-        image: identical(image, _imageSentinel)
-            ? this.image
-            : image as PickedImage?,
+        image: identical(image, _sentinel) ? this.image : image as PickedImage?,
+        emotion:
+            identical(emotion, _sentinel) ? this.emotion : emotion as String?,
       );
 }
 
@@ -143,6 +148,10 @@ class PinComposeController extends Notifier<PinComposeState> {
   /// 選択した画像を取り消す。
   void clearImage() => state = state.copyWith(image: null);
 
+  /// 感情ラベルを選ぶ（同じものを再選択すると解除）。
+  void toggleEmotion(String key) =>
+      state = state.copyWith(emotion: state.emotion == key ? null : key);
+
   Future<PinComposeResult> submit() async {
     if (!state.canSubmit) return PinComposeResult.invalid;
     state = state.copyWith(isSubmitting: true);
@@ -160,6 +169,7 @@ class PinComposeController extends Notifier<PinComposeState> {
             lat: state.lat!,
             lng: state.lng!,
             imageUrl: imageUrl,
+            emotion: state.emotion,
           );
       state = state.copyWith(isSubmitting: false);
       return PinComposeResult.success;

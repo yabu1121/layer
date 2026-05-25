@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 
+import '../../core/models/emotion.dart';
 import '../map/map_controller.dart';
 import 'pin_compose_controller.dart';
 
@@ -163,6 +164,18 @@ class _PinComposeScreenState extends ConsumerState<PinComposeScreen> {
                     border: OutlineInputBorder(),
                   ),
                   onChanged: notifier.updateBody,
+                ),
+                const SizedBox(height: 12),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    for (final e in emotionOptions)
+                      ChoiceChip(
+                        label: Text('${e.emoji} ${e.label}'),
+                        selected: state.emotion == e.key,
+                        onSelected: (_) => notifier.toggleEmotion(e.key),
+                      ),
+                  ],
                 ),
                 const SizedBox(height: 12),
                 if (state.image != null)

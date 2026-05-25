@@ -31,6 +31,7 @@ class Pin {
     required this.createdAt,
     required this.author,
     this.imageUrl,
+    this.emotion,
   });
 
   final String id;
@@ -41,12 +42,14 @@ class Pin {
   final DateTime? createdAt;
   final PinAuthor author;
   final String? imageUrl; // 任意。R2 上の画像 URL（US-B3）
+  final String? emotion; // 任意。感情ラベルの key（US-B4）
 
   /// 自分の Pin か。author.id（= ownerId）と自分の UUID を比較する。
   bool isMine(String myUserId) => author.id == myUserId;
 
   factory Pin.fromJson(Map<String, dynamic> json) {
     final rawImage = json['imageUrl'] as String?;
+    final rawEmotion = json['emotion'] as String?;
     return Pin(
       id: json['id'] as String? ?? '',
       ownerId: json['userId'] as String? ?? '',
@@ -58,6 +61,7 @@ class Pin {
         (json['author'] as Map?)?.cast<String, dynamic>() ?? const {},
       ),
       imageUrl: (rawImage != null && rawImage.isNotEmpty) ? rawImage : null,
+      emotion: (rawEmotion != null && rawEmotion.isNotEmpty) ? rawEmotion : null,
     );
   }
 }
