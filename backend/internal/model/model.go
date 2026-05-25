@@ -42,6 +42,7 @@ type Pin struct {
 	UserID    string    `gorm:"type:uuid;not null;index" json:"userId"`
 	Body      string    `gorm:"not null" json:"body"`
 	ImageURL  *string   `json:"imageUrl,omitempty"` // 任意。R2 上の画像 URL（US-B3）
+	Emotion   *string   `json:"emotion,omitempty"`  // 任意。感情ラベル（US-B4）
 	CreatedAt time.Time `json:"createdAt"`
 }
 

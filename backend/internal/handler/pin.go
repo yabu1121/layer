@@ -38,6 +38,12 @@ type createPinRequest struct {
 	Lat      *float64 `json:"lat"`
 	Lng      *float64 `json:"lng"`
 	ImageURL *string  `json:"image_url"` // 任意。R2 にアップロード済みの画像 URL
+	Emotion  *string  `json:"emotion"`   // 任意。感情ラベル（allowedEmotions のいずれか）
+}
+
+// allowedEmotions は許可する感情ラベル（mobile と一致）。
+var allowedEmotions = map[string]bool{
+	"calm": true, "happy": true, "excited": true, "nostalgic": true, "moved": true,
 }
 
 // pinAuthor は Pin 投稿者の公開プロフィール。
@@ -56,6 +62,7 @@ type createdPin struct {
 	Lat       float64   `json:"lat"`
 	Lng       float64   `json:"lng"`
 	ImageURL  *string   `json:"imageUrl,omitempty"`
+	Emotion   *string   `json:"emotion,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 	Author    pinAuthor `json:"author"`
 }
@@ -72,6 +79,7 @@ type pinRow struct {
 	Lat               float64   `gorm:"column:lat"`
 	Lng               float64   `gorm:"column:lng"`
 	ImageURL          *string   `gorm:"column:image_url"`
+	Emotion           *string   `gorm:"column:emotion"`
 	CreatedAt         time.Time `gorm:"column:created_at"`
 	AuthorID          string    `gorm:"column:author_id"`
 	AuthorUserID      string    `gorm:"column:author_user_id"`
@@ -82,7 +90,7 @@ type pinRow struct {
 func (r pinRow) toCreatedPin() createdPin {
 	return createdPin{
 		ID: r.ID, UserID: r.UserID, Body: r.Body, Lat: r.Lat, Lng: r.Lng,
-		ImageURL: r.ImageURL, CreatedAt: r.CreatedAt,
+		ImageURL: r.ImageURL, Emotion: r.Emotion, CreatedAt: r.CreatedAt,
 		Author: pinAuthor{ID: r.AuthorID, UserID: r.AuthorUserID, DisplayName: r.AuthorDisplayName, Icon: r.AuthorIcon},
 	}
 }
@@ -90,7 +98,7 @@ func (r pinRow) toCreatedPin() createdPin {
 // pinWithAuthorColumns は pins p ↔ users u を JOIN した select 句（lat/lng と author を展開）。
 const pinWithAuthorColumns = `p.id as id, p.user_id as user_id, p.body as body,
 	st_y(p.location::geometry) as lat, st_x(p.location::geometry) as lng,
-	p.image_url as image_url,
+	p.image_url as image_url, p.emotion as emotion,
 	p.created_at as created_at,
 	u.id as author_id, u.user_id as author_user_id,
 	u.display_name as author_display_name, u.icon as author_icon`
@@ -104,6 +112,7 @@ type pinResponse struct {
 	Lat       float64   `json:"lat"`
 	Lng       float64   `json:"lng"`
 	ImageURL  *string   `json:"imageUrl,omitempty"`
+	Emotion   *string   `json:"emotion,omitempty"`
 	CreatedAt time.Time `json:"createdAt"`
 }
 
@@ -112,7 +121,7 @@ type pinResponse struct {
 const pinSelectColumns = `id, user_id, body,
 	st_y(location::geometry) as lat,
 	st_x(location::geometry) as lng,
-	image_url,
+	image_url, emotion,
 	created_at`
 
 // List は Pin 一覧を返す（スタブ。FR-4.2: 友達＋自分の Pin に絞る実装は今後）。
@@ -156,18 +165,30 @@ func (h *PinHandler) Create(c echo.Context) error {
 		}
 	}
 
+	// 感情ラベルは任意。空は NULL、許可値以外は 400。
+	var emotion *string
+	if req.Emotion != nil {
+		if v := strings.TrimSpace(*req.Emotion); v != "" {
+			if !allowedEmotions[v] {
+				return echo.NewHTTPError(http.StatusBadRequest, "invalid emotion")
+			}
+			emotion = &v
+		}
+	}
+
 	// ST_MakePoint は (経度, 緯度) の順。created_at は raw insert のため now() で明示。
-	const q = `insert into pins (user_id, body, image_url, location, created_at)
-		values (?, ?, ?, st_setsrid(st_makepoint(?, ?), 4326)::geography, now())
-		returning id, image_url, st_y(location::geometry) as lat, st_x(location::geometry) as lng, created_at`
+	const q = `insert into pins (user_id, body, image_url, emotion, location, created_at)
+		values (?, ?, ?, ?, st_setsrid(st_makepoint(?, ?), 4326)::geography, now())
+		returning id, image_url, emotion, st_y(location::geometry) as lat, st_x(location::geometry) as lng, created_at`
 	var row struct {
 		ID        string
 		ImageURL  *string
+		Emotion   *string
 		Lat       float64
 		Lng       float64
 		CreatedAt time.Time
 	}
-	if err := h.db.Raw(q, me.ID, body, imageURL, *req.Lng, *req.Lat).Scan(&row).Error; err != nil {
+	if err := h.db.Raw(q, me.ID, body, imageURL, emotion, *req.Lng, *req.Lat).Scan(&row).Error; err != nil {
 		return echo.NewHTTPError(http.StatusInternalServerError, err.Error())
 	}
 
@@ -178,6 +199,7 @@ func (h *PinHandler) Create(c echo.Context) error {
 		Lat:       row.Lat,
 		Lng:       row.Lng,
 		ImageURL:  row.ImageURL,
+		Emotion:   row.Emotion,
 		CreatedAt: row.CreatedAt,
 		Author:    pinAuthor{ID: me.ID, UserID: me.UserID, DisplayName: me.DisplayName, Icon: me.Icon},
 	}})
