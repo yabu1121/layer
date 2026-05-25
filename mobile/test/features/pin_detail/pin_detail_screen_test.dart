@@ -166,6 +166,18 @@ void main() {
     expect(find.byType(Image), findsNothing);
   });
 
+  testWidgets('画像タップで全画面ビューアを開く', (tester) async {
+    await tester.pumpWidget(
+      _app(const [], mainImageUrl: 'https://cdn.example/r2/x.jpg'),
+    );
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsNothing);
+
+    await tester.tap(find.byType(Image));
+    await tester.pumpAndSettle();
+    expect(find.byType(InteractiveViewer), findsOneWidget);
+  });
+
   testWidgets('コメントを一覧表示し、投稿で即時反映する', (tester) async {
     final repo = _FakeCommentRepo(initial: [
       Comment(
