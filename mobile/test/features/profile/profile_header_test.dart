@@ -14,6 +14,7 @@ void main() {
         ),
       ),
     ));
+    await tester.pumpAndSettle(); // 投稿数のカウントアップ完了を待つ
     expect(find.text('😎'), findsOneWidget);
     expect(find.text('リョウ'), findsOneWidget);
     expect(find.text('@riyo_1234'), findsOneWidget);

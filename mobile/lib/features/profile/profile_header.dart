@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../core/widgets/animated_count.dart';
+
 /// 自分/他人プロフィールで共用するヘッダ（アイコン・表示名・@ハンドル・投稿数）。
 class ProfileHeader extends StatelessWidget {
   const ProfileHeader({
@@ -46,9 +48,11 @@ class _Stat extends StatelessWidget {
     final theme = Theme.of(context);
     return Column(
       children: [
-        Text('$value',
-            style: theme.textTheme.titleMedium
-                ?.copyWith(fontWeight: FontWeight.bold)),
+        AnimatedCount(
+          value: value,
+          style: theme.textTheme.titleMedium
+              ?.copyWith(fontWeight: FontWeight.bold),
+        ),
         Text(label, style: theme.textTheme.bodySmall),
       ],
     );
